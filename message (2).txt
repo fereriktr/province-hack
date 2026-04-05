@@ -1,68 +1,67 @@
 -- ========== ЗАГРУЗКА БИБЛИОТЕКИ ==========
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Robojini/Tuturial_UI_Library/main/UI_Template_1"))()
 local plr = game.Players.LocalPlayer
-local Window = Library.CreateLib("Prov Hub By Oleg Mongol and Blockrazz v.0.0.1","RJTheme5")
+local playerGui = plr:WaitForChild("PlayerGui")
+
+-- ========== ПРОВЕРКА ЗАГРУЗКИ БИБЛИОТЕКИ ==========
+if not Library then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Ошибка",
+        Text = "Не удалось загрузить библиотеку. Перезапусти скрипт.",
+        Duration = 5
+    })
+    return
+end
 
 -- ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
 local weaponGiven = false
 local currentWeapon = nil
-local isExecuting = false
-local weaponHandle = nil
+local isProcessing = false
+local antiCheatKilled = false
 
--- ========== БЛОКИРОВКА ВСЕХ REMOTE СОБЫТИЙ ==========
-local blockedRemotes = {}
-local function blockRemote(remote)
-    if blockedRemotes[remote] then return end
-    blockedRemotes[remote] = true
-    local oldFire = remote.FireServer
-    remote.FireServer = function(...)
-        return nil
-    end
-end
-
--- Блокируем все потенциально опасные удаленные события
-for _, v in pairs(game:GetDescendants()) do
-    if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-        local name = v.Name:lower()
-        if name:find("report") or name:find("log") or name:find("anticheat") or 
-           name:find("ban") or name:find("kick") or name:find("detect") or
-           name:find("cheat") or name:find("hack") or name:find("ac_") then
-            blockRemote(v)
-            pcall(function() v:Destroy() end)
-        end
-    end
-end
-
--- ========== ПОЛНОЕ УНИЧТОЖЕНИЕ АНТИЧИТА ==========
-local function killAntiCheat()
-    -- Уничтожаем скрипты античита
+-- ========== 1. ПОЛНОЕ УНИЧТОЖЕНИЕ АНТИЧИТА ==========
+local function fullAntiCheatKill()
+    if antiCheatKilled then return end
+    
+    -- Уничтожение скриптов античита
+    local scriptsToDestroy = {
+        "AntiCheat", "AntiHack", "AntiExploit", "Security", "Guard",
+        "Protection", "Monitor", "Logger", "Detector", "Admin", "Moderation"
+    }
+    
     for _, v in pairs(game:GetDescendants()) do
         if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
-            local name = v.Name:lower()
-            if name:find("anticheat") or name:find("antihack") or name:find("security") or
-               name:find("protect") or name:find("guard") or name:find("admin") or
-               name:find("moder") or name:find("cheat") or name:find("detect") then
-                pcall(function() v.Disabled = true end)
+            for _, name in pairs(scriptsToDestroy) do
+                if v.Name:lower():find(name:lower()) then
+                    pcall(function() 
+                        v.Disabled = true
+                        v:Destroy()
+                    end)
+                end
+            end
+        end
+        
+        -- Уничтожение удаленных событий
+        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+            local vName = v.Name:lower()
+            if vName:find("report") or vName:find("log") or vName:find("cheat") or
+               vName:find("hack") or vName:find("detect") or vName:find("ban") or
+               vName:find("kick") or vName:find("ac_") or vName:find("anticheat") then
                 pcall(function() v:Destroy() end)
             end
         end
     end
     
-    -- Уничтожаем детекторы
-    for _, v in pairs(game:GetDescendants()) do
-        if v.Name:lower():find("detect") or v.Name:lower():find("check") or
-           v.Name:lower():find("monitor") or v.Name:lower():find("logger") then
-            pcall(function() v:Destroy() end)
-        end
-    end
+    antiCheatKilled = true
+    print("[✔] Античит уничтожен")
 end
 
--- ========== БЛОКИРОВКА ВСЕХ ЗВУКОВ (СКРИМЕРОВ) ==========
-local function blockAllSounds()
-    -- Отключаем все звуки
+-- ========== 2. БЛОКИРОВКА ЗВУКОВ (СКРИМЕРОВ) ==========
+local function blockAllAudio()
+    -- Отключение всех существующих звуков
     for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("Sound") or v:IsA("SoundGroup") then
-            pcall(function() 
+        if v:IsA("Sound") then
+            pcall(function()
                 v.Volume = 0
                 v.Playing = false
                 v:Stop()
@@ -70,56 +69,68 @@ local function blockAllSounds()
         end
     end
     
-    -- Блокируем воспроизведение новых звуков
-    local oldPlay = Instance.new("Sound").Play
-    hookfunction(oldPlay, function(self)
-        if self.Name:lower():find("scream") or self.Name:lower():find("scary") or
-           self.Name:lower():find("jumpscare") or self.Name:lower():find("alert") then
-            return nil
+    -- Перехват новых звуков
+    local oldSound = Instance.new("Sound").Play
+    hookfunction(oldSound, function(sound)
+        local soundName = sound.Name:lower()
+        local blockWords = {"scream", "scary", "jumpscare", "alert", "alarm", "warning", "ban", "kick"}
+        for _, word in pairs(blockWords) do
+            if soundName:find(word) then
+                return nil
+            end
         end
-        return oldPlay(self)
+        return oldSound(sound)
     end)
+    
+    print("[✔] Звуки отключены")
 end
 
--- ========== БЛОКИРОВКА ТЕЛЕПОРТАЦИИ В БАН ==========
-local function blockTeleportToBan()
-    local oldTeleport = game:GetService("TeleportService").Teleport
-    game:GetService("TeleportService").Teleport = function(placeId, ...)
-        if placeId ~= game.PlaceId then
-            return nil
+-- ========== 3. ЗАЩИТА ОТ КИКА И БАНА ==========
+local function antiKickBan()
+    -- Блокировка кика
+    pcall(function()
+        game.Players.LocalPlayer.Kick = function() end
+    end)
+    
+    -- Блокировка телепортации в бан
+    pcall(function()
+        local teleportService = game:GetService("TeleportService")
+        local oldTeleport = teleportService.Teleport
+        teleportService.Teleport = function(placeId, ...)
+            if placeId ~= game.PlaceId then
+                return nil
+            end
+            return oldTeleport(placeId, ...)
         end
-        return oldTeleport(placeId, ...)
-    end
+    end)
+    
+    -- Блокировка уничтожения игры
+    pcall(function()
+        local oldDestroy = game.Destroy
+        game.Destroy = function() end
+    end)
+    
+    print("[✔] Защита от кика/бана активирована")
 end
 
--- ========== ЗАЩИТА ОТ КИКА ==========
-local function blockKick()
-    local oldKick = game.Players.LocalPlayer.Kick
-    game.Players.LocalPlayer.Kick = function() end
-    
-    local oldDestroy = game.Destroy
-    game.Destroy = function(self)
-        if self == game then return end
-        return oldDestroy(self)
-    end
+-- ========== 4. ПЕРЕХВАТ ЛОГОВ ==========
+local function interceptLogs()
+    pcall(function()
+        local oldPrint = print
+        print = function(...) 
+            local args = {...}
+            local argsStr = tostring(args)
+            if argsStr:lower():find("cheat") or argsStr:lower():find("hack") then
+                return nil
+            end
+            return oldPrint(...)
+        end
+    end)
+    print("[✔] Логи перехвачены")
 end
 
--- ========== ПЕРЕХВАТ ЛОГОВ ==========
-local function blockLogs()
-    local oldPrint = print
-    print = function(...) end
-    
-    local oldWarn = warn
-    warn = function(...) end
-    
-    -- Восстанавливаем через 2 секунды
-    wait(2)
-    print = oldPrint
-    warn = oldWarn
-end
-
--- ========== ОСНОВНАЯ ФУНКЦИЯ ВЫДАЧИ ПМ (БЕЗ ДЮПА) ==========
-local function givePMSafely()
+-- ========== 5. БЕЗОПАСНАЯ ВЫДАЧА ПМ (БЕЗ ДЮПА) ==========
+local function givePMSafe()
     -- Проверка на повторную выдачу
     if weaponGiven then
         game:GetService("StarterGui"):SetCore("SendNotification", {
@@ -130,117 +141,103 @@ local function givePMSafely()
         return false
     end
     
-    -- Защита от одновременного выполнения
-    if isExecuting then
+    -- Защита от одновременного запуска
+    if isProcessing then
         return false
     end
-    isExecuting = true
+    isProcessing = true
     
-    -- Полный обход античита перед выдачей
+    -- Запускаем защиту перед выдачей
     pcall(function()
-        killAntiCheat()
-        blockAllSounds()
-        blockTeleportToBan()
-        blockKick()
-        blockLogs()
+        fullAntiCheatKill()
+        blockAllAudio()
+        antiKickBan()
+        interceptLogs()
     end)
     
-    -- Ищем ПМ в игровом мире
-    local weaponFound = nil
-    local maxAttempts = 10
-    local attempt = 0
-    
-    while not weaponFound and attempt < maxAttempts do
+    -- Поиск ПМ в игровом мире
+    local weapon = nil
+    for _ = 1, 10 do
         for _, v in pairs(game:GetDescendants()) do
-            if v.Name == "ПМ" and v:IsA("Tool") and v.Parent ~= plr.Backpack and v.Parent ~= plr.Character then
-                weaponFound = v
-                break
+            if v.Name == "ПМ" and v:IsA("Tool") then
+                if v.Parent ~= plr.Backpack and v.Parent ~= plr.Character then
+                    weapon = v
+                    break
+                end
             end
         end
-        if not weaponFound then
-            wait(0.5)
-            attempt = attempt + 1
-        end
+        if weapon then break end
+        wait(0.3)
     end
     
-    if weaponFound then
-        -- УДАЛЯЕМ ВСЕ КОПИИ ПМ ИЗ ИНВЕНТАРЯ (предотвращение дюпа)
-        local toDestroy = {}
-        for _, tool in pairs(plr.Backpack:GetChildren()) do
-            if tool.Name == "ПМ" then
-                table.insert(toDestroy, tool)
-            end
-        end
-        for _, tool in pairs(plr.Character:GetChildren()) do
-            if tool.Name == "ПМ" then
-                table.insert(toDestroy, tool)
-            end
-        end
-        for _, tool in pairs(toDestroy) do
-            pcall(function() tool:Destroy() end)
-        end
-        
-        -- Отключаем все скрипты внутри оружия
-        for _, script in pairs(weaponFound:GetDescendants()) do
-            if script:IsA("Script") or script:IsA("LocalScript") then
-                pcall(function() script.Disabled = true end)
-            end
-        end
-        
-        -- Выдаем оружие
-        pcall(function() weaponFound.Parent = plr.Backpack end)
-        weaponGiven = true
-        currentWeapon = weaponFound
-        weaponHandle = weaponFound
-        
-        -- Мониторинг оружия (автовосстановление при попытке дюпа)
-        spawn(function()
-            while weaponGiven and weaponHandle and weaponHandle.Parent do
-                wait(0.5)
-                -- Проверяем, не появилась ли копия
-                local copies = 0
-                for _, tool in pairs(plr.Backpack:GetChildren()) do
-                    if tool.Name == "ПМ" and tool ~= weaponHandle then
-                        pcall(function() tool:Destroy() end)
-                        copies = copies + 1
-                    end
-                end
-                for _, tool in pairs(plr.Character:GetChildren()) do
-                    if tool.Name == "ПМ" and tool ~= weaponHandle then
-                        pcall(function() tool:Destroy() end)
-                        copies = copies + 1
-                    end
-                end
-                if copies > 0 then
-                    game:GetService("StarterGui"):SetCore("SendNotification", {
-                        Title = "Защита",
-                        Text = "Попытка дюпа предотвращена",
-                        Duration = 2
-                    })
-                end
-            end
-        end)
-        
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Успех",
-            Text = "ПМ выдан! Дюп невозможен.",
-            Duration = 3
-        })
-        isExecuting = false
-        return true
-    else
+    if not weapon then
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "Ошибка",
             Text = "ПМ не найден в игре",
             Duration = 3
         })
-        isExecuting = false
+        isProcessing = false
         return false
     end
+    
+    -- УДАЛЕНИЕ ВСЕХ КОПИЙ ПМ (ПРЕДОТВРАЩЕНИЕ ДЮПА)
+    local copiesToDelete = {}
+    for _, tool in pairs(plr.Backpack:GetChildren()) do
+        if tool.Name == "ПМ" and tool ~= weapon then
+            table.insert(copiesToDelete, tool)
+        end
+    end
+    for _, tool in pairs(plr.Character:GetChildren()) do
+        if tool.Name == "ПМ" and tool ~= weapon then
+            table.insert(copiesToDelete, tool)
+        end
+    end
+    for _, tool in pairs(copiesToDelete) do
+        pcall(function() tool:Destroy() end)
+    end
+    
+    -- Отключение скриптов внутри оружия
+    for _, script in pairs(weapon:GetDescendants()) do
+        if script:IsA("Script") or script:IsA("LocalScript") then
+            pcall(function() script.Disabled = true end)
+        end
+    end
+    
+    -- Выдача оружия
+    pcall(function() weapon.Parent = plr.Backpack end)
+    weaponGiven = true
+    currentWeapon = weapon
+    
+    -- Мониторинг для предотвращения дюпа
+    spawn(function()
+        while weaponGiven and currentWeapon and currentWeapon.Parent do
+            wait(0.5)
+            -- Удаляем случайно появившиеся копии
+            for _, tool in pairs(plr.Backpack:GetChildren()) do
+                if tool.Name == "ПМ" and tool ~= currentWeapon then
+                    pcall(function() tool:Destroy() end)
+                end
+            end
+            for _, tool in pairs(plr.Character:GetChildren()) do
+                if tool.Name == "ПМ" and tool ~= currentWeapon then
+                    pcall(function() tool:Destroy() end)
+                end
+            end
+        end
+    end)
+    
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Успех",
+        Text = "ПМ выдан! Дюп невозможен.",
+        Duration = 3
+    })
+    
+    isProcessing = false
+    return true
 end
 
--- ========== БЕСКОНЕЧНЫЕ ПАТРОНЫ ==========
-local function setInfiniteAmmo()
+-- ========== 6. БЕСКОНЕЧНЫЕ ПАТРОНЫ ==========
+local function infiniteAmmo()
     if not weaponGiven then
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "Ошибка",
@@ -251,16 +248,16 @@ local function setInfiniteAmmo()
     end
     
     local weapon = nil
-    for _, v in pairs(plr.Backpack:GetChildren()) do
-        if v.Name == "ПМ" then
-            weapon = v
+    for _, tool in pairs(plr.Backpack:GetChildren()) do
+        if tool.Name == "ПМ" then
+            weapon = tool
             break
         end
     end
     if not weapon then
-        for _, v in pairs(plr.Character:GetChildren()) do
-            if v.Name == "ПМ" then
-                weapon = v
+        for _, tool in pairs(plr.Character:GetChildren()) do
+            if tool.Name == "ПМ" then
+                weapon = tool
                 break
             end
         end
@@ -270,7 +267,7 @@ local function setInfiniteAmmo()
         local mag = weapon.RepValues.Mag
         mag.Value = 99999999
         
-        -- Защита от сброса
+        -- Постоянное обновление
         spawn(function()
             while weaponGiven and weapon and weapon.Parent do
                 wait(0.3)
@@ -298,37 +295,20 @@ local function setInfiniteAmmo()
     end
 end
 
--- ========== ТЕЛЕПОРТЫ ==========
-local Teleport = Window:NewTab("Телепорты")
-local Tp = Teleport:NewSection("Телепорты")
-
-local teleportLocations = {
-    {name = "Больница", pos = CFrame.new(-3394.24463, 5.05000019, 263.195526)},
-    {name = "Церковь", pos = CFrame.new(-2659.02637, 2.55033565, -739.766541)},
-    {name = "Мвд", pos = CFrame.new(-2852.2749, 18.6000004, 1110.59045)},
-    {name = "Мчс", pos = CFrame.new(-1886.40942, 2.70004678, 297.478699)},
-    {name = "Гаражи", pos = CFrame.new(-3253.19141, 7.5912075, -544.405945)},
-    {name = "Разветка Украины", pos = CFrame.new(-2057.31274, -17.4150505, -272.960266)},
-    {name = "Деревня", pos = CFrame.new(-2791.89429, 2.27600002, 2833.02954)},
-    {name = "Пятёрочка", pos = CFrame.new(-2406.3667, 7.48527145, 39.0829697)}
+-- ========== 7. ТЕЛЕПОРТЫ ==========
+local teleportPoints = {
+    {name = "Больница", cf = CFrame.new(-3394.24463, 5.05000019, 263.195526)},
+    {name = "Церковь", cf = CFrame.new(-2659.02637, 2.55033565, -739.766541)},
+    {name = "Мвд", cf = CFrame.new(-2852.2749, 18.6000004, 1110.59045)},
+    {name = "Мчс", cf = CFrame.new(-1886.40942, 2.70004678, 297.478699)},
+    {name = "Гаражи", cf = CFrame.new(-3253.19141, 7.5912075, -544.405945)},
+    {name = "Разветка Украины", cf = CFrame.new(-2057.31274, -17.4150505, -272.960266)},
+    {name = "Деревня", cf = CFrame.new(-2791.89429, 2.27600002, 2833.02954)},
+    {name = "Пятёрочка", cf = CFrame.new(-2406.3667, 7.48527145, 39.0829697)}
 }
 
-for _, loc in pairs(teleportLocations) do
-    Tp:NewButton(loc.name, "Телепорт в " .. loc.name, function()
-        pcall(function()
-            if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                plr.Character.HumanoidRootPart.CFrame = loc.pos
-            end
-        end)
-    end)
-end
-
--- ========== ВЗЛОМЫ ==========
-local Hacks = Window:NewTab("Взломы")
-local Hack = Hacks:NewSection("Взлом")
-
--- Дюп фейрверков (безопасный)
-Hack:NewButton("Дюп фейрверков", "Безопасный дюп", function()
+-- ========== 8. ДЮП ФЕЙРВЕРКОВ ==========
+local function dupeFireworks()
     pcall(function()
         for _, v in pairs(game.Workspace:GetDescendants()) do
             if v:IsA("ProximityPrompt") and v.Parent and v.Parent.Name == "FireworkGiver" then
@@ -341,61 +321,124 @@ Hack:NewButton("Дюп фейрверков", "Безопасный дюп", fun
         if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
             plr.Character.HumanoidRootPart.CFrame = CFrame.new(-2406.3667, 7.48527145, 39.0829697)
         end
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Успех",
+            Text = "Дюп фейрверков активирован",
+            Duration = 2
+        })
     end)
-end)
+end
 
--- Выдача ПМ (БЕЗ ДЮПА И БЕЗ СКРИМЕРА)
-Hack:NewButton("Выдача ПМ (1 раз, без дюпа)", "Безопасная выдача", function()
-    givePMSafely()
-end)
-
--- Бесконечные патроны
-Hack:NewButton("Бесконечные патроны", "После получения ПМ", function()
-    setInfiniteAmmo()
-end)
-
--- ========== ВОССТАНОВЛЕНИЕ ПОСЛЕ СМЕРТИ ==========
-game.Players.LocalPlayer.CharacterAdded:Connect(function(char)
+-- ========== 9. ВОССТАНОВЛЕНИЕ ПОСЛЕ СМЕРТИ ==========
+plr.CharacterAdded:Connect(function()
     wait(1)
-    if weaponGiven and weaponHandle then
+    if weaponGiven then
         pcall(function()
-            -- Ищем оружие в мире
             for _, v in pairs(game:GetDescendants()) do
-                if v.Name == "ПМ" and v:IsA("Tool") and v ~= weaponHandle then
-                    v.Parent = plr.Backpack
-                    weaponHandle = v
-                    break
+                if v.Name == "ПМ" and v:IsA("Tool") and v ~= currentWeapon then
+                    if v.Parent ~= plr.Backpack and v.Parent ~= plr.Character then
+                        v.Parent = plr.Backpack
+                        currentWeapon = v
+                        break
+                    end
                 end
             end
         end)
     end
 end)
 
--- ========== ЗАЩИТА ОТ ВЫЛЕТА ==========
-local function preventCrash()
-    -- Отключаем скримеры
-    blockAllSounds()
-    
-    -- Блокируем бесконечные циклы
-    local oldWait = wait
-    wait = function(t)
-        if t and t < 0 then t = 0.1 end
-        return oldWait(t)
-    end
+-- ========== 10. СОЗДАНИЕ МЕНЮ ==========
+-- Задержка для корректного создания меню
+wait(0.5)
+
+local Window = Library.CreateLib("Prov Hub By Oleg Mongol and Blockrazz v.0.0.1", "RJTheme5")
+
+if not Window then
+    game:GetService("StarterGui"):SetCore("SendNotification", {
+        Title = "Ошибка",
+        Text = "Не удалось создать меню. Перезапусти скрипт.",
+        Duration = 5
+    })
+    return
 end
 
-preventCrash()
+-- Вкладка: Телепорты
+local TeleportTab = Window:NewTab("Телепорты")
+local TeleportSection = TeleportTab:NewSection("Телепорты")
 
--- ========== СОЗДАТЕЛИ ==========
-local Creator = Window:NewTab("Создатели")
-local Creators = Creator:NewSection("Создатели")
+for _, point in pairs(teleportPoints) do
+    TeleportSection:NewButton(point.name, "Телепорт в " .. point.name, function()
+        pcall(function()
+            if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
+                plr.Character.HumanoidRootPart.CFrame = point.cf
+            end
+        end)
+    end)
+end
 
-Creators:NewButton("Oleg Mongol", "Идея Гуи", function()
+-- Вкладка: Взломы
+local HacksTab = Window:NewTab("Взломы")
+local HacksSection = HacksTab:NewSection("Взломы")
+
+HacksSection:NewButton("Дюп фейрверков", "Бесконечные фейрверки", function()
+    dupeFireworks()
+end)
+
+HacksSection:NewButton("Выдача ПМ (1 раз)", "Выдает ПМ один раз за сессию", function()
+    givePMSafe()
+end)
+
+HacksSection:NewButton("Бесконечные патроны", "Бесконечный магазин для ПМ", function()
+    infiniteAmmo()
+end)
+
+-- Вкладка: Защита
+local ProtectionTab = Window:NewTab("Защита")
+local ProtectionSection = ProtectionTab:NewSection("Анти-детект")
+
+ProtectionSection:NewButton("Активировать защиту", "Включить все методы обхода", function()
+    pcall(function()
+        fullAntiCheatKill()
+        blockAllAudio()
+        antiKickBan()
+        interceptLogs()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Защита",
+            Text = "Все методы обхода активированы",
+            Duration = 2
+        })
+    end)
+end)
+
+-- Вкладка: Создатели
+local CreatorsTab = Window:NewTab("Создатели")
+local CreatorsSection = CreatorsTab:NewSection("Создатели")
+
+CreatorsSection:NewButton("Oleg Mongol", "Идея Гуи", function()
     print("Oleg Mongol")
 end)
 
-Creators:NewButton("Blockrazz", "Скриптинг", function()
+CreatorsSection:NewButton("Blockrazz", "Скриптинг", function()
     print("Blockrazz")
 end)
 
-print("[✔] Скрипт загружен | Дюп невозможен | Скримеры отключены | Античит обойден")
+-- ========== 11. ФИНАЛЬНЫЙ ЗАПУСК ЗАЩИТЫ ==========
+spawn(function()
+    wait(1)
+    fullAntiCheatKill()
+    blockAllAudio()
+    antiKickBan()
+    interceptLogs()
+end)
+
+-- ========== СООБЩЕНИЕ О ЗАГРУЗКЕ ==========
+game:GetService("StarterGui"):SetCore("SendNotification", {
+    Title = "Prov Hub",
+    Text = "Скрипт загружен! Защита активна.",
+    Duration = 3
+})
+
+print("[✔] Prov Hub загружен")
+print("[✔] Античит обойден")
+print("[✔] Дюп оружия невозможен")
+print("[✔] Скримеры отключены")
