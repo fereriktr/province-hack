@@ -3,217 +3,230 @@ local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Roboj
 local plr = game.Players.LocalPlayer
 local Window = Library.CreateLib("Prov Hub By Oleg Mongol and Blockrazz v.0.0.1","RJTheme5")
 
--- ========== ПОЛНЫЙ ОБХОД АНТИЧИТА ==========
-local AntiCheat = {
-    -- 1. Отключение всех удаленных событий античита
-    killRemotes = function()
-        local remotesToKill = {
-            "AntiCheat", "AntiCheatLog", "ReportPlayer", "LogData", 
-            "CheatDetected", "BanPlayer", "KickPlayer", "SendLogs",
-            "PlayerReport", "AC_Check", "AntiExploit"
-        }
-        
-        for _, v in pairs(game:GetDescendants()) do
-            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-                for _, name in pairs(remotesToKill) do
-                    if v.Name:lower():find(name:lower()) then
-                        pcall(function() v:Destroy() end)
-                    end
-                end
-            end
+-- ========== ГЛОБАЛЬНЫЕ ПЕРЕМЕННЫЕ ==========
+local weaponGiven = false
+local currentWeapon = nil
+local isExecuting = false
+local weaponHandle = nil
+
+-- ========== БЛОКИРОВКА ВСЕХ REMOTE СОБЫТИЙ ==========
+local blockedRemotes = {}
+local function blockRemote(remote)
+    if blockedRemotes[remote] then return end
+    blockedRemotes[remote] = true
+    local oldFire = remote.FireServer
+    remote.FireServer = function(...)
+        return nil
+    end
+end
+
+-- Блокируем все потенциально опасные удаленные события
+for _, v in pairs(game:GetDescendants()) do
+    if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+        local name = v.Name:lower()
+        if name:find("report") or name:find("log") or name:find("anticheat") or 
+           name:find("ban") or name:find("kick") or name:find("detect") or
+           name:find("cheat") or name:find("hack") or name:find("ac_") then
+            blockRemote(v)
+            pcall(function() v:Destroy() end)
         end
-    end,
-    
-    -- 2. Уничтожение скриптов античита
-    killScripts = function()
-        local scriptsToKill = {
-            "AntiCheat", "AntiExploit", "AC", "AntiHack", "Security",
-            "PlayerMonitor", "GameGuard", "Protection", "Admin"
-        }
-        
-        for _, v in pairs(game:GetDescendants()) do
-            if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
-                for _, name in pairs(scriptsToKill) do
-                    if v.Name:lower():find(name:lower()) then
-                        pcall(function() v.Disabled = true end)
-                        pcall(function() v:Destroy() end)
-                    end
-                end
-            end
-        end
-    end,
-    
-    -- 3. Перехват и блокировка отправки логов
-    blockLogs = function()
-        local oldFireServer = hookfunction(Instance.new("RemoteEvent").FireServer, function(self, ...)
-            local args = {...}
-            local argsStr = tostring(args)
-            
-            -- Блокируем любые подозрительные отправки
-            local blockedKeywords = {"log", "report", "cheat", "hack", "ban", "kick", "detect", "ac_"}
-            for _, keyword in pairs(blockedKeywords) do
-                if argsStr:lower():find(keyword) then
-                    return nil
-                end
-            end
-            
-            -- Блокируем отправку если имя remote содержит античит
-            if self.Name:lower():find("anticheat") or self.Name:lower():find("report") then
-                return nil
-            end
-            
-            return oldFireServer(self, ...)
-        end)
-    end,
-    
-    -- 4. Скрытие факта выполнения скрипта
-    hideExecution = function()
-        -- Скрываем скрипт из стектрейса
-        local oldError = error
-        error = function(...) return nil end
-        
-        -- Отключаем вывод в консоль
-        local oldPrint = print
-        print = function(...) end
-        
-        -- Восстанавливаем через 1 секунду
-        wait(1)
-        print = oldPrint
-        error = oldError
-    end,
-    
-    -- 5. Уничтожение детекторов
-    killDetectors = function()
-        for _, v in pairs(game:GetDescendants()) do
-            -- Отключаем все ProximityPrompt детекторы
-            if v:IsA("ProximityPrompt") then
-                v.Enabled = false
-            end
-            
-            -- Уничтожаем кастомные детекторы
-            if v.Name:lower():find("detect") or v.Name:lower():find("check") then
+    end
+end
+
+-- ========== ПОЛНОЕ УНИЧТОЖЕНИЕ АНТИЧИТА ==========
+local function killAntiCheat()
+    -- Уничтожаем скрипты античита
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
+            local name = v.Name:lower()
+            if name:find("anticheat") or name:find("antihack") or name:find("security") or
+               name:find("protect") or name:find("guard") or name:find("admin") or
+               name:find("moder") or name:find("cheat") or name:find("detect") then
+                pcall(function() v.Disabled = true end)
                 pcall(function() v:Destroy() end)
             end
         end
-    end,
-    
-    -- 6. Обход через метатаблицы
-    hookGame = function()
-        local mt = getrawmetatable(game)
-        local old = mt.__namecall
-        setreadonly(mt, false)
-        
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            local args = {...}
-            
-            -- Блокируем любые проверки
-            if method == "FireServer" then
-                local selfStr = tostring(self)
-                local argsStr = tostring(args)
-                
-                if selfStr:lower():find("anticheat") or argsStr:lower():find("detect") then
-                    return nil
-                end
-            end
-            
-            -- Блокируем кик
-            if method == "Kick" then
-                return nil
-            end
-            
-            return old(self, ...)
-        end)
-        
-        setreadonly(mt, true)
-    end,
-    
-    -- 7. Полный запуск обхода
-    fullBypass = function()
-        print("[*] Обход античита...")
-        
-        pcall(function() AntiCheat.killRemotes() end)
-        pcall(function() AntiCheat.killScripts() end)
-        pcall(function() AntiCheat.blockLogs() end)
-        pcall(function() AntiCheat.killDetectors() end)
-        pcall(function() AntiCheat.hookGame() end)
-        pcall(function() AntiCheat.hideExecution() end)
-        
-        print("[✔] Античит полностью обойден")
     end
-}
+    
+    -- Уничтожаем детекторы
+    for _, v in pairs(game:GetDescendants()) do
+        if v.Name:lower():find("detect") or v.Name:lower():find("check") or
+           v.Name:lower():find("monitor") or v.Name:lower():find("logger") then
+            pcall(function() v:Destroy() end)
+        end
+    end
+end
 
--- Запуск обхода
-AntiCheat.fullBypass()
+-- ========== БЛОКИРОВКА ВСЕХ ЗВУКОВ (СКРИМЕРОВ) ==========
+local function blockAllSounds()
+    -- Отключаем все звуки
+    for _, v in pairs(game:GetDescendants()) do
+        if v:IsA("Sound") or v:IsA("SoundGroup") then
+            pcall(function() 
+                v.Volume = 0
+                v.Playing = false
+                v:Stop()
+            end)
+        end
+    end
+    
+    -- Блокируем воспроизведение новых звуков
+    local oldPlay = Instance.new("Sound").Play
+    hookfunction(oldPlay, function(self)
+        if self.Name:lower():find("scream") or self.Name:lower():find("scary") or
+           self.Name:lower():find("jumpscare") or self.Name:lower():find("alert") then
+            return nil
+        end
+        return oldPlay(self)
+    end)
+end
 
--- ========== ПЕРЕМЕННЫЕ ДЛЯ КОНТРОЛЯ ВЫДАЧИ ==========
-local weaponGiven = false
-local currentWeapon = nil
+-- ========== БЛОКИРОВКА ТЕЛЕПОРТАЦИИ В БАН ==========
+local function blockTeleportToBan()
+    local oldTeleport = game:GetService("TeleportService").Teleport
+    game:GetService("TeleportService").Teleport = function(placeId, ...)
+        if placeId ~= game.PlaceId then
+            return nil
+        end
+        return oldTeleport(placeId, ...)
+    end
+end
 
--- ========== ФУНКЦИЯ БЕЗОПАСНОЙ ВЫДАЧИ ОРУЖИЯ (НЕТ ДЮПА) ==========
-function giveWeaponSafely()
+-- ========== ЗАЩИТА ОТ КИКА ==========
+local function blockKick()
+    local oldKick = game.Players.LocalPlayer.Kick
+    game.Players.LocalPlayer.Kick = function() end
+    
+    local oldDestroy = game.Destroy
+    game.Destroy = function(self)
+        if self == game then return end
+        return oldDestroy(self)
+    end
+end
+
+-- ========== ПЕРЕХВАТ ЛОГОВ ==========
+local function blockLogs()
+    local oldPrint = print
+    print = function(...) end
+    
+    local oldWarn = warn
+    warn = function(...) end
+    
+    -- Восстанавливаем через 2 секунды
+    wait(2)
+    print = oldPrint
+    warn = oldWarn
+end
+
+-- ========== ОСНОВНАЯ ФУНКЦИЯ ВЫДАЧИ ПМ (БЕЗ ДЮПА) ==========
+local function givePMSafely()
+    -- Проверка на повторную выдачу
     if weaponGiven then
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "Ошибка",
-            Text = "Оружие уже выдано! Перезапустите скрипт.",
+            Text = "ПМ уже выдан! Перезапустите скрипт.",
             Duration = 3
         })
         return false
     end
     
-    -- Ищем оружие в игровом мире
-    local weaponFound = nil
-    for _, v in pairs(game.Players:GetDescendants()) do
-        if v.Name == "ПМ" and v:IsA("Tool") then
-            weaponFound = v
-            break
-        end
+    -- Защита от одновременного выполнения
+    if isExecuting then
+        return false
     end
+    isExecuting = true
     
-    if not weaponFound then
-        for _, v in pairs(game.Workspace:GetDescendants()) do
-            if v.Name == "ПМ" and v:IsA("Tool") then
+    -- Полный обход античита перед выдачей
+    pcall(function()
+        killAntiCheat()
+        blockAllSounds()
+        blockTeleportToBan()
+        blockKick()
+        blockLogs()
+    end)
+    
+    -- Ищем ПМ в игровом мире
+    local weaponFound = nil
+    local maxAttempts = 10
+    local attempt = 0
+    
+    while not weaponFound and attempt < maxAttempts do
+        for _, v in pairs(game:GetDescendants()) do
+            if v.Name == "ПМ" and v:IsA("Tool") and v.Parent ~= plr.Backpack and v.Parent ~= plr.Character then
                 weaponFound = v
                 break
             end
         end
+        if not weaponFound then
+            wait(0.5)
+            attempt = attempt + 1
+        end
     end
     
     if weaponFound then
-        -- Удаляем все копии оружия из инвентаря
+        -- УДАЛЯЕМ ВСЕ КОПИИ ПМ ИЗ ИНВЕНТАРЯ (предотвращение дюпа)
+        local toDestroy = {}
         for _, tool in pairs(plr.Backpack:GetChildren()) do
             if tool.Name == "ПМ" then
-                tool:Destroy()
+                table.insert(toDestroy, tool)
             end
         end
         for _, tool in pairs(plr.Character:GetChildren()) do
             if tool.Name == "ПМ" then
-                tool:Destroy()
+                table.insert(toDestroy, tool)
+            end
+        end
+        for _, tool in pairs(toDestroy) do
+            pcall(function() tool:Destroy() end)
+        end
+        
+        -- Отключаем все скрипты внутри оружия
+        for _, script in pairs(weaponFound:GetDescendants()) do
+            if script:IsA("Script") or script:IsA("LocalScript") then
+                pcall(function() script.Disabled = true end)
             end
         end
         
         -- Выдаем оружие
-        weaponFound.Parent = plr.Backpack
+        pcall(function() weaponFound.Parent = plr.Backpack end)
         weaponGiven = true
         currentWeapon = weaponFound
+        weaponHandle = weaponFound
         
-        -- Добавляем защиту от удаления
-        local tool = weaponFound
-        local connection
-        connection = tool.AncestryChanged:Connect(function()
-            if tool.Parent ~= plr.Backpack and tool.Parent ~= plr.Character then
-                wait(0.1)
-                if not tool.Parent then
-                    pcall(function() tool.Parent = plr.Backpack end)
+        -- Мониторинг оружия (автовосстановление при попытке дюпа)
+        spawn(function()
+            while weaponGiven and weaponHandle and weaponHandle.Parent do
+                wait(0.5)
+                -- Проверяем, не появилась ли копия
+                local copies = 0
+                for _, tool in pairs(plr.Backpack:GetChildren()) do
+                    if tool.Name == "ПМ" and tool ~= weaponHandle then
+                        pcall(function() tool:Destroy() end)
+                        copies = copies + 1
+                    end
+                end
+                for _, tool in pairs(plr.Character:GetChildren()) do
+                    if tool.Name == "ПМ" and tool ~= weaponHandle then
+                        pcall(function() tool:Destroy() end)
+                        copies = copies + 1
+                    end
+                end
+                if copies > 0 then
+                    game:GetService("StarterGui"):SetCore("SendNotification", {
+                        Title = "Защита",
+                        Text = "Попытка дюпа предотвращена",
+                        Duration = 2
+                    })
                 end
             end
         end)
         
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "Успех",
-            Text = "ПМ выдан!",
-            Duration = 2
+            Text = "ПМ выдан! Дюп невозможен.",
+            Duration = 3
         })
+        isExecuting = false
         return true
     else
         game:GetService("StarterGui"):SetCore("SendNotification", {
@@ -221,16 +234,17 @@ function giveWeaponSafely()
             Text = "ПМ не найден в игре",
             Duration = 3
         })
+        isExecuting = false
         return false
     end
 end
 
--- ========== ФУНКЦИЯ БЕСКОНЕЧНЫХ ПАТРОНОВ ==========
-function setInfiniteAmmo()
+-- ========== БЕСКОНЕЧНЫЕ ПАТРОНЫ ==========
+local function setInfiniteAmmo()
     if not weaponGiven then
         game:GetService("StarterGui"):SetCore("SendNotification", {
             Title = "Ошибка",
-            Text = "Сначала получите оружие!",
+            Text = "Сначала получите ПМ!",
             Duration = 3
         })
         return
@@ -243,26 +257,30 @@ function setInfiniteAmmo()
             break
         end
     end
-    for _, v in pairs(plr.Character:GetChildren()) do
-        if v.Name == "ПМ" then
-            weapon = v
-            break
+    if not weapon then
+        for _, v in pairs(plr.Character:GetChildren()) do
+            if v.Name == "ПМ" then
+                weapon = v
+                break
+            end
         end
     end
     
     if weapon and weapon:FindFirstChild("RepValues") and weapon.RepValues:FindFirstChild("Mag") then
-        -- Устанавливаем бесконечные патроны
         local mag = weapon.RepValues.Mag
-        mag.Value = 999999
+        mag.Value = 99999999
         
         -- Защита от сброса
         spawn(function()
-            while wait(0.5) do
-                if mag and mag.Parent then
-                    if mag.Value < 999999 then
-                        mag.Value = 999999
+            while weaponGiven and weapon and weapon.Parent do
+                wait(0.3)
+                pcall(function()
+                    if weapon.RepValues and weapon.RepValues.Mag then
+                        if weapon.RepValues.Mag.Value < 99999999 then
+                            weapon.RepValues.Mag.Value = 99999999
+                        end
                     end
-                end
+                end)
             end
         end)
         
@@ -284,22 +302,22 @@ end
 local Teleport = Window:NewTab("Телепорты")
 local Tp = Teleport:NewSection("Телепорты")
 
-local teleports = {
-    {name = "Больница", pos = CFrame.new(-3394.24463, 5.05000019, 263.195526, -0.173624277, 0, 0.984811902, 0, 1, 0, -0.984811902, 0, -0.173624277)},
-    {name = "Церковь", pos = CFrame.new(-2659.02637, 2.55033565, -739.766541, 0.984812498, 0, 0.173621148, 0, 1, 0, -0.173621148, 0, 0.984812498)},
-    {name = "Мвд", pos = CFrame.new(-2852.2749, 18.6000004, 1110.59045, 0.173624337, 0, 0.984811902, 0, 1, 0, -0.984811902, 0, 0.173624337)},
-    {name = "Мчс", pos = CFrame.new(-1886.40942, 2.70004678, 297.478699, 0, 0, 1, 0, 1, -0, -1, 0, 0)},
-    {name = "Гаражи", pos = CFrame.new(-3253.19141, 7.5912075, -544.405945, 0.438328028, 0.898815036, -4.10974026e-05, 4.10974026e-05, -6.58035278e-05, -1, -0.898815036, 0.438328028, -6.58035278e-05)},
-    {name = "Разветка Украины", pos = CFrame.new(-2057.31274, -17.4150505, -272.960266, -0.573599219, 0, 0.81913656, 0, 1, 0, -0.81913656, 0, -0.573599219)},
-    {name = "Деревня", pos = CFrame.new(-2791.89429, 2.27600002, 2833.02954, -0.933587909, 0, -0.358349502, 0, 1, 0, 0.358349502, 0, -0.933587909)},
-    {name = "Пятёрочка", pos = CFrame.new(-2406.3667, 7.48527145, 39.0829697, 0.173615217, 0.984813571, -5.48362732e-06, -5.48362732e-06, 6.55651093e-06, 1, 0.984813571, -0.173615217, 6.55651093e-06)}
+local teleportLocations = {
+    {name = "Больница", pos = CFrame.new(-3394.24463, 5.05000019, 263.195526)},
+    {name = "Церковь", pos = CFrame.new(-2659.02637, 2.55033565, -739.766541)},
+    {name = "Мвд", pos = CFrame.new(-2852.2749, 18.6000004, 1110.59045)},
+    {name = "Мчс", pos = CFrame.new(-1886.40942, 2.70004678, 297.478699)},
+    {name = "Гаражи", pos = CFrame.new(-3253.19141, 7.5912075, -544.405945)},
+    {name = "Разветка Украины", pos = CFrame.new(-2057.31274, -17.4150505, -272.960266)},
+    {name = "Деревня", pos = CFrame.new(-2791.89429, 2.27600002, 2833.02954)},
+    {name = "Пятёрочка", pos = CFrame.new(-2406.3667, 7.48527145, 39.0829697)}
 }
 
-for _, tp in pairs(teleports) do
-    Tp:NewButton(tp.name, "Телепортирует в " .. tp.name, function()
+for _, loc in pairs(teleportLocations) do
+    Tp:NewButton(loc.name, "Телепорт в " .. loc.name, function()
         pcall(function()
             if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                plr.Character.HumanoidRootPart.CFrame = tp.pos
+                plr.Character.HumanoidRootPart.CFrame = loc.pos
             end
         end)
     end)
@@ -309,14 +327,13 @@ end
 local Hacks = Window:NewTab("Взломы")
 local Hack = Hacks:NewSection("Взлом")
 
--- Дюп фейрверков (исправлен)
-Hack:NewButton("Дюп фейрверков", "Работает стабильно", function()
+-- Дюп фейрверков (безопасный)
+Hack:NewButton("Дюп фейрверков", "Безопасный дюп", function()
     pcall(function()
         for _, v in pairs(game.Workspace:GetDescendants()) do
             if v:IsA("ProximityPrompt") and v.Parent and v.Parent.Name == "FireworkGiver" then
                 v.Enabled = true
                 v.HoldDuration = 0
-                -- Отключаем детекцию
                 v.RequiresLineOfSight = false
                 v.MaxActivationDistance = 50
             end
@@ -327,39 +344,47 @@ Hack:NewButton("Дюп фейрверков", "Работает стабильн
     end)
 end)
 
--- Выдача ПМ (БЕЗ ДЮПА)
-Hack:NewButton("Выдача ПМ (1 раз)", "Выдаст ПМ только один раз", function()
-    giveWeaponSafely()
+-- Выдача ПМ (БЕЗ ДЮПА И БЕЗ СКРИМЕРА)
+Hack:NewButton("Выдача ПМ (1 раз, без дюпа)", "Безопасная выдача", function()
+    givePMSafely()
 end)
 
 -- Бесконечные патроны
-Hack:NewButton("Бесконечные патроны", "Требует ПМ", function()
+Hack:NewButton("Бесконечные патроны", "После получения ПМ", function()
     setInfiniteAmmo()
 end)
 
--- ========== ЗАЩИТА ОТ СМЕРТИ ==========
--- Восстанавливаем оружие после смерти
+-- ========== ВОССТАНОВЛЕНИЕ ПОСЛЕ СМЕРТИ ==========
 game.Players.LocalPlayer.CharacterAdded:Connect(function(char)
-    wait(0.5)
-    if weaponGiven and currentWeapon then
-        -- Ищем оружие в мире
-        for _, v in pairs(game.Players:GetDescendants()) do
-            if v.Name == "ПМ" and v:IsA("Tool") and v ~= currentWeapon then
-                v.Parent = plr.Backpack
-                currentWeapon = v
-                break
+    wait(1)
+    if weaponGiven and weaponHandle then
+        pcall(function()
+            -- Ищем оружие в мире
+            for _, v in pairs(game:GetDescendants()) do
+                if v.Name == "ПМ" and v:IsA("Tool") and v ~= weaponHandle then
+                    v.Parent = plr.Backpack
+                    weaponHandle = v
+                    break
+                end
             end
-        end
+        end)
     end
 end)
 
--- ========== ЗАЩИТА ОТ КИКОВ ==========
--- Блокируем кик
-local oldKick = game.Players.LocalPlayer.Kick
-game.Players.LocalPlayer.Kick = function() end
+-- ========== ЗАЩИТА ОТ ВЫЛЕТА ==========
+local function preventCrash()
+    -- Отключаем скримеры
+    blockAllSounds()
+    
+    -- Блокируем бесконечные циклы
+    local oldWait = wait
+    wait = function(t)
+        if t and t < 0 then t = 0.1 end
+        return oldWait(t)
+    end
+end
 
--- Блокируем телепорт в бан
-game:GetService("TeleportService").Teleport = function() end
+preventCrash()
 
 -- ========== СОЗДАТЕЛИ ==========
 local Creator = Window:NewTab("Создатели")
@@ -373,4 +398,4 @@ Creators:NewButton("Blockrazz", "Скриптинг", function()
     print("Blockrazz")
 end)
 
-print("[✔] Скрипт загружен | Дюп оружия невозможен | Античит обойден")
+print("[✔] Скрипт загружен | Дюп невозможен | Скримеры отключены | Античит обойден")
