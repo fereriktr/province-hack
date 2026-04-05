@@ -1,390 +1,426 @@
--- SWILL: Полное меню для Wallhack + Aimbot (Roblox Lua)
--- Активация: Insert (Ins) для открытия/закрытия меню
+-- SWILL: РАБОЧЕЕ МЕНЮ + ESP + AIMBOT (FIXED)
+-- Открытие/закрытие: INSERT
+-- Перемещение: зажать ЛКМ на заголовке
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
-local Camera = workspace.CurrentCamera
+local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
-local Mouse = LocalPlayer:GetMouse()
+local Camera = workspace.CurrentCamera
 
 -- ========== НАСТРОЙКИ ==========
 local Settings = {
-    -- Вкладка "AIMBOT"
-    AimbotEnabled = true,
-    AimbotFOV = 120,
-    AimbotSmoothness = 0.3,
-    AimbotKey = "Button2", -- Button1(левая), Button2(правая), Button3(средняя)
-    AimPart = "Head",      -- Head, Torso, HumanoidRootPart
-    VisibleCheck = false,
-    TeamCheck = true,
-    
-    -- Вкладка "VISUALS"
-    WallhackEnabled = true,
-    BoxESP = true,
-    NameESP = true,
-    HealthBar = true,
-    DistanceESP = true,
-    Snaplines = false,
-    ChamsColor = {r = 1, g = 0, b = 0}, -- Красный
-    GlowEnabled = false,
-    
-    -- Вкладка "MISC"
-    Triggerbot = false,
-    TriggerbotDelay = 0.05,
-    BunnyHop = false,
-    NoRecoil = false,
-    NoSpread = false,
-    SpeedHack = false,
-    SpeedValue = 50
+    MenuOpen = false,
+    Aimbot = false,
+    FOV = 120,
+    Smoothness = 0.3,
+    Wallhack = true,
+    ShowBox = true,
+    ShowName = true,
+    ShowHealth = true,
+    ShowDistance = false,
+    TeamCheck = true
 }
 
--- ========== СОЗДАНИЕ ГРАФИЧЕСКОГО МЕНЮ ==========
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SWILL_Menu"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = game:GetService("CoreGui")
+-- ========== ФУНКЦИЯ ДЛЯ ЧАТ-ЛОГА (работает во всех экзекьюторах) ==========
+local function log(msg)
+    if game:GetService("StarterGui"):FindFirstChild("Chat") then
+        game:GetService("StarterGui").Chat:AddMessage(" [SWILL] " .. msg)
+    end
+    print("[SWILL] " .. msg)
+end
 
+-- ========== СОЗДАНИЕ GUI (СТАБИЛЬНЫЙ ВАРИАНТ) ==========
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SWILL_HUB"
+ScreenGui.ResetOnSpawn = false
+
+-- Ожидание загрузки CoreGui
+local success, err = pcall(function()
+    ScreenGui.Parent = CoreGui
+end)
+if not success then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end
+
+-- Главное окно
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 500, 0, 400)
-MainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+MainFrame.Size = UDim2.new(0, 450, 0, 500)
+MainFrame.Position = UDim2.new(0.5, -225, 0.5, -250)
+MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
 MainFrame.BackgroundTransparency = 0.05
 MainFrame.BorderSizePixel = 0
 MainFrame.Visible = false
 MainFrame.Parent = ScreenGui
 
+-- Тень/обводка
+local Shadow = Instance.new("UICorner")
+Shadow.CornerRadius = UDim.new(0, 8)
+Shadow.Parent = MainFrame
+
+local Stroke = Instance.new("UIStroke")
+Stroke.Thickness = 1
+Stroke.Color = Color3.fromRGB(80, 80, 100)
+Stroke.Parent = MainFrame
+
 -- Заголовок
 local TitleBar = Instance.new("Frame")
-TitleBar.Size = UDim2.new(1, 0, 0, 35)
-TitleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+TitleBar.Size = UDim2.new(1, 0, 0, 40)
+TitleBar.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+TitleBar.BackgroundTransparency = 0
 TitleBar.BorderSizePixel = 0
 TitleBar.Parent = MainFrame
 
+local TitleCorner = Instance.new("UICorner")
+TitleCorner.CornerRadius = UDim.new(0, 8)
+TitleCorner.Parent = TitleBar
+
 local TitleText = Instance.new("TextLabel")
-TitleText.Size = UDim2.new(1, 0, 1, 0)
+TitleText.Size = UDim2.new(1, -50, 1, 0)
+TitleText.Position = UDim2.new(0, 15, 0, 0)
 TitleText.BackgroundTransparency = 1
-TitleText.Text = "SWILL HUB | ROBLOX"
+TitleText.Text = "SWILL HUB v2.0"
 TitleText.TextColor3 = Color3.fromRGB(255, 100, 100)
 TitleText.TextSize = 18
 TitleText.Font = Enum.Font.GothamBold
-TitleText.TextXAlignment = Enum.TextXAlignment.Center
+TitleText.TextXAlignment = Enum.TextXAlignment.Left
 TitleText.Parent = TitleBar
 
 -- Кнопка закрытия
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 30, 1, 0)
-CloseBtn.Position = UDim2.new(1, -30, 0, 0)
+CloseBtn.Size = UDim2.new(0, 35, 0, 35)
+CloseBtn.Position = UDim2.new(1, -40, 0, 2)
 CloseBtn.BackgroundTransparency = 1
-CloseBtn.Text = "X"
+CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.TextSize = 16
+CloseBtn.TextSize = 18
+CloseBtn.Font = Enum.Font.Gotham
 CloseBtn.Parent = TitleBar
 CloseBtn.MouseButton1Click:Connect(function()
+    Settings.MenuOpen = false
     MainFrame.Visible = false
 end)
 
 -- Вкладки
-local TabContainer = Instance.new("Frame")
-TabContainer.Size = UDim2.new(1, 0, 0, 35)
-TabContainer.Position = UDim2.new(0, 0, 0, 35)
-TabContainer.BackgroundTransparency = 1
-TabContainer.Parent = MainFrame
+local TabBar = Instance.new("Frame")
+TabBar.Size = UDim2.new(1, 0, 0, 35)
+TabBar.Position = UDim2.new(0, 0, 0, 40)
+TabBar.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+TabBar.BorderSizePixel = 0
+TabBar.Parent = MainFrame
 
-local Tabs = {"AIMBOT", "VISUALS", "MISC"}
-local SelectedTab = "AIMBOT"
+local tabs = {"AIM", "ESP", "MISC"}
+local currentTab = "AIM"
+local tabButtons = {}
 
-local TabButtons = {}
-local ContentFrames = {}
-
-for i, tabName in ipairs(Tabs) do
+for i, tabName in ipairs(tabs) do
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 120, 1, 0)
-    btn.Position = UDim2.new(0, (i-1)*120, 0, 0)
-    btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-    btn.BackgroundTransparency = 0.3
+    btn.Size = UDim2.new(0, 150, 1, 0)
+    btn.Position = UDim2.new(0, (i-1)*150, 0, 0)
+    btn.BackgroundColor3 = (tabName == "AIM") and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(40, 40, 50)
     btn.Text = tabName
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
     btn.TextSize = 14
-    btn.Font = Enum.Font.Gotham
+    btn.Font = Enum.Font.GothamSemibold
     btn.BorderSizePixel = 0
-    btn.Parent = TabContainer
-    
-    local content = Instance.new("ScrollingFrame")
-    content.Size = UDim2.new(1, -20, 1, -50)
-    content.Position = UDim2.new(0, 10, 0, 70)
-    content.BackgroundTransparency = 1
-    content.CanvasSize = UDim2.new(0, 0, 0, 0)
-    content.ScrollBarThickness = 6
-    content.Visible = (tabName == SelectedTab)
-    content.Parent = MainFrame
-    
-    TabButtons[tabName] = btn
-    ContentFrames[tabName] = content
+    btn.Parent = TabBar
+    tabButtons[tabName] = btn
     
     btn.MouseButton1Click:Connect(function()
-        SelectedTab = tabName
-        for name, frame in pairs(ContentFrames) do
-            frame.Visible = (name == tabName)
+        currentTab = tabName
+        for _, b in pairs(tabButtons) do
+            b.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
         end
-        for name, button in pairs(TabButtons) do
-            button.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
-            button.BackgroundTransparency = 0.3
+        btn.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+        for _, frame in pairs(contentFrames) do
+            frame.Visible = false
         end
-        btn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
-        btn.BackgroundTransparency = 0
+        contentFrames[tabName].Visible = true
     end)
 end
 
--- Вспомогательная функция для создания элементов меню
-local function CreateCheckbox(parent, text, yPos, getter, setter)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 30)
-    frame.Position = UDim2.new(0, 0, 0, yPos)
+-- Контентные фреймы
+local contentFrames = {}
+local function createContentFrame(tabName)
+    local frame = Instance.new("ScrollingFrame")
+    frame.Size = UDim2.new(1, -20, 1, -95)
+    frame.Position = UDim2.new(0, 10, 0, 80)
     frame.BackgroundTransparency = 1
-    frame.Parent = parent
-    
-    local checkbox = Instance.new("ImageButton")
-    checkbox.Size = UDim2.new(0, 20, 0, 20)
-    checkbox.Position = UDim2.new(0, 5, 0.5, -10)
-    checkbox.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-    checkbox.BorderSizePixel = 1
-    checkbox.Image = getter() and "rbxassetid://3926305904" or ""
-    checkbox.Parent = frame
-    
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -35, 1, 0)
-    label.Position = UDim2.new(0, 30, 0, 0)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(220, 220, 220)
-    label.TextSize = 14
-    label.TextXAlignment = Enum.TextXAlignment.Left
-    label.Parent = frame
-    
-    checkbox.MouseButton1Click:Connect(function()
-        setter(not getter())
-        checkbox.Image = getter() and "rbxassetid://3926305904" or ""
-    end)
-    
+    frame.CanvasSize = UDim2.new(0, 0, 0, 400)
+    frame.ScrollBarThickness = 5
+    frame.Visible = (currentTab == tabName)
+    frame.Parent = MainFrame
+    contentFrames[tabName] = frame
     return frame
 end
 
-local function CreateSlider(parent, text, yPos, minVal, maxVal, getter, setter, isInt)
+-- Функция создания чекбокса
+local function addCheckbox(parent, text, y, getter, setter)
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 50)
-    frame.Position = UDim2.new(0, 0, 0, yPos)
+    frame.Size = UDim2.new(1, -20, 0, 35)
+    frame.Position = UDim2.new(0, 0, 0, y)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 22, 0, 22)
+    btn.Position = UDim2.new(0, 5, 0.5, -11)
+    btn.BackgroundColor3 = getter() and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(50, 50, 60)
+    btn.Text = getter() and "✓" or ""
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 16
+    btn.BorderSizePixel = 0
+    btn.Parent = frame
+    
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(1, -40, 1, 0)
+    lbl.Position = UDim2.new(0, 35, 0, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(220, 220, 220)
+    lbl.TextSize = 14
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = frame
+    
+    btn.MouseButton1Click:Connect(function()
+        setter(not getter())
+        btn.BackgroundColor3 = getter() and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(50, 50, 60)
+        btn.Text = getter() and "✓" or ""
+    end)
+end
+
+-- Функция создания слайдера
+local function addSlider(parent, text, y, minVal, maxVal, getter, setter, isInt)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 60)
+    frame.Position = UDim2.new(0, 0, 0, y)
     frame.BackgroundTransparency = 1
     frame.Parent = parent
     
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 20)
+    label.Size = UDim2.new(1, 0, 0, 25)
     label.BackgroundTransparency = 1
     label.Text = text .. ": " .. tostring(getter())
     label.TextColor3 = Color3.fromRGB(220, 220, 220)
     label.TextSize = 13
     label.Parent = frame
     
-    local slider = Instance.new("Frame")
-    slider.Size = UDim2.new(1, 0, 0, 4)
-    slider.Position = UDim2.new(0, 0, 0, 25)
-    slider.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
-    slider.BorderSizePixel = 0
-    slider.Parent = frame
+    local sliderBg = Instance.new("Frame")
+    sliderBg.Size = UDim2.new(1, 0, 0, 4)
+    sliderBg.Position = UDim2.new(0, 0, 0, 35)
+    sliderBg.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    sliderBg.BorderSizePixel = 0
+    sliderBg.Parent = frame
     
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new((getter() - minVal) / (maxVal - minVal), 0, 1, 0)
     fill.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
     fill.BorderSizePixel = 0
-    fill.Parent = slider
+    fill.Parent = sliderBg
     
     local knob = Instance.new("TextButton")
-    knob.Size = UDim2.new(0, 12, 0, 12)
-    knob.Position = UDim2.new((getter() - minVal) / (maxVal - minVal), -6, 0.5, -6)
+    knob.Size = UDim2.new(0, 14, 0, 14)
+    knob.Position = UDim2.new((getter() - minVal) / (maxVal - minVal), -7, 0.5, -7)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.Text = ""
     knob.BorderSizePixel = 0
-    knob.Parent = slider
+    knob.Parent = sliderBg
     
     local dragging = false
-    knob.MouseButton1Down:Connect(function()
-        dragging = true
-    end)
+    knob.MouseButton1Down:Connect(function() dragging = true end)
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = false
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
     end)
     knob.MouseMoved:Connect(function()
-        if dragging then
-            local mousePos = UserInputService:GetMouseLocation().X
-            local sliderPos = slider.AbsolutePosition.X
-            local sliderWidth = slider.AbsoluteSize.X
-            local percent = math.clamp((mousePos - sliderPos) / sliderWidth, 0, 1)
-            local value = minVal + percent * (maxVal - minVal)
-            if isInt then value = math.floor(value) end
-            setter(math.clamp(value, minVal, maxVal))
-            fill.Size = UDim2.new(percent, 0, 1, 0)
-            knob.Position = UDim2.new(percent, -6, 0.5, -6)
-            label.Text = text .. ": " .. tostring(getter())
-        end
+        if not dragging then return end
+        local mouseX = UserInputService:GetMouseLocation().X
+        local barX = sliderBg.AbsolutePosition.X
+        local barW = sliderBg.AbsoluteSize.X
+        local percent = math.clamp((mouseX - barX) / barW, 0, 1)
+        local value = minVal + percent * (maxVal - minVal)
+        if isInt then value = math.floor(value) end
+        setter(math.clamp(value, minVal, maxVal))
+        fill.Size = UDim2.new(percent, 0, 1, 0)
+        knob.Position = UDim2.new(percent, -7, 0.5, -7)
+        label.Text = text .. ": " .. tostring(getter())
     end)
-    
-    return frame
 end
 
-local function CreateDropdown(parent, text, yPos, options, getter, setter)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 40)
-    frame.Position = UDim2.new(0, 0, 0, yPos)
-    frame.BackgroundTransparency = 1
-    frame.Parent = parent
+-- Заполнение вкладок
+local aimFrame = createContentFrame("AIM")
+addCheckbox(aimFrame, "Aimbot Enabled", 5, function() return Settings.Aimbot end, function(v) Settings.Aimbot = v end)
+addSlider(aimFrame, "FOV (degrees)", 45, 10, 360, function() return Settings.FOV end, function(v) Settings.FOV = v end, true)
+addSlider(aimFrame, "Smoothness", 110, 0, 1, function() return Settings.Smoothness end, function(v) Settings.Smoothness = v end, false)
+
+local espFrame = createContentFrame("ESP")
+addCheckbox(espFrame, "Wallhack (Glow)", 5, function() return Settings.Wallhack end, function(v) Settings.Wallhack = v end)
+addCheckbox(espFrame, "Box ESP", 45, function() return Settings.ShowBox end, function(v) Settings.ShowBox = v end)
+addCheckbox(espFrame, "Name + Health", 85, function() return Settings.ShowName end, function(v) Settings.ShowName = v end)
+addCheckbox(espFrame, "Distance ESP", 125, function() return Settings.ShowDistance end, function(v) Settings.ShowDistance = v end)
+addCheckbox(espFrame, "Team Check", 165, function() return Settings.TeamCheck end, function(v) Settings.TeamCheck = v end)
+
+local miscFrame = createContentFrame("MISC")
+local lbl = Instance.new("TextLabel")
+lbl.Size = UDim2.new(1, 0, 0, 30)
+lbl.Position = UDim2.new(0, 0, 0, 10)
+lbl.BackgroundTransparency = 1
+lbl.Text = "Доп. функции в разработке"
+lbl.TextColor3 = Color3.fromRGB(150, 150, 150)
+lbl.TextSize = 12
+lbl.Parent = miscFrame
+
+-- ========== ESP (ВИДИМОСТЬ СКВОЗЬ СТЕНЫ) ==========
+local espFolder = Instance.new("Folder")
+espFolder.Name = "SWILL_ESP"
+espFolder.Parent = CoreGui
+
+local function createESP(player)
+    if player == LocalPlayer then return end
     
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 0, 20)
-    label.BackgroundTransparency = 1
-    label.Text = text
-    label.TextColor3 = Color3.fromRGB(220, 220, 220)
-    label.TextSize = 13
-    label.Parent = frame
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "h_" .. player.Name
+    highlight.FillTransparency = 0.6
+    highlight.OutlineTransparency = 0.2
+    highlight.FillColor = Color3.fromRGB(255, 100, 100)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.Parent = espFolder
     
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 150, 0, 25)
-    btn.Position = UDim2.new(0, 0, 0, 20)
-    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
-    btn.Text = getter()
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 12
-    btn.Parent = frame
+    local bill = Instance.new("BillboardGui")
+    bill.Name = "b_" .. player.Name
+    bill.Size = UDim2.new(0, 120, 0, 35)
+    bill.StudsOffset = Vector3.new(0, 2.2, 0)
+    bill.AlwaysOnTop = true
+    bill.Parent = espFolder
     
-    local dropdown = Instance.new("Frame")
-    dropdown.Size = UDim2.new(0, 150, 0, #options * 25)
-    dropdown.Position = UDim2.new(0, 0, 0, 45)
-    dropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-    dropdown.Visible = false
-    dropdown.Parent = frame
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.TextColor3 = Color3.fromRGB(255, 255, 255)
+    txt.TextStrokeTransparency = 0.3
+    txt.TextSize = 12
+    txt.Font = Enum.Font.Gotham
+    txt.Parent = bill
     
-    for i, opt in ipairs(options) do
-        local optBtn = Instance.new("TextButton")
-        optBtn.Size = UDim2.new(1, 0, 0, 25)
-        optBtn.Position = UDim2.new(0, 0, 0, (i-1)*25)
-        optBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
-        optBtn.Text = opt
-        optBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        optBtn.TextSize = 12
-        optBtn.Parent = dropdown
-        optBtn.MouseButton1Click:Connect(function()
-            setter(opt)
-            btn.Text = opt
-            dropdown.Visible = false
-        end)
+    local update = function()
+        if not player.Character then
+            highlight.Adornee = nil
+            bill.Adornee = nil
+            return
+        end
+        highlight.Adornee = player.Character
+        bill.Adornee = player.Character
+        
+        local hum = player.Character:FindFirstChild("Humanoid")
+        local hp = hum and math.floor(hum.Health) or 0
+        local dist = (player.Character:FindFirstChild("HumanoidRootPart") and (Camera.CFrame.Position - player.Character.HumanoidRootPart.Position).Magnitude or 0)
+        local distText = Settings.ShowDistance and (" | " .. math.floor(dist) .. "m") or ""
+        txt.Text = (Settings.ShowName and (player.Name .. " [" .. hp .. "HP]" .. distText) or "")
+        
+        highlight.Enabled = Settings.Wallhack
+        bill.Enabled = Settings.ShowName
     end
     
-    btn.MouseButton1Click:Connect(function()
-        dropdown.Visible = not dropdown.Visible
-    end)
+    player.CharacterAdded:Connect(update)
+    player.CharacterRemoving:Connect(update)
+    update()
     
-    return frame
+    RunService.Heartbeat:Connect(update)
 end
 
--- ========== ЗАПОЛНЕНИЕ ВКЛАДКИ AIMBOT ==========
-local aimbotContent = ContentFrames["AIMBOT"]
-local yOffset = 0
+for _, plr in ipairs(Players:GetPlayers()) do
+    createESP(plr)
+end
+Players.PlayerAdded:Connect(createESP)
 
-CreateCheckbox(aimbotContent, "Enable Aimbot", yOffset, function() return Settings.AimbotEnabled end, function(v) Settings.AimbotEnabled = v end)
-yOffset = yOffset + 35
-CreateSlider(aimbotContent, "FOV (Degrees)", yOffset, 10, 360, function() return Settings.AimbotFOV end, function(v) Settings.AimbotFOV = v end, true)
-yOffset = yOffset + 55
-CreateSlider(aimbotContent, "Smoothness", yOffset, 0, 1, function() return Settings.AimbotSmoothness end, function(v) Settings.AimbotSmoothness = v end, false)
-yOffset = yOffset + 55
-CreateDropdown(aimbotContent, "Aim Key", yOffset, {"Button1", "Button2", "Button3"}, function() return Settings.AimbotKey end, function(v) Settings.AimbotKey = v end)
-yOffset = yOffset + 45
-CreateDropdown(aimbotContent, "Aim Part", yOffset, {"Head", "Torso", "HumanoidRootPart"}, function() return Settings.AimPart end, function(v) Settings.AimPart = v end)
-yOffset = yOffset + 45
-CreateCheckbox(aimbotContent, "Visible Check", yOffset, function() return Settings.VisibleCheck end, function(v) Settings.VisibleCheck = v end)
-yOffset = yOffset + 35
-CreateCheckbox(aimbotContent, "Team Check", yOffset, function() return Settings.TeamCheck end, function(v) Settings.TeamCheck = v end)
-
--- ========== ВКЛАДКА VISUALS ==========
-local visualsContent = ContentFrames["VISUALS"]
-yOffset = 0
-
-CreateCheckbox(visualsContent, "Wallhack (Glow)", yOffset, function() return Settings.WallhackEnabled end, function(v) Settings.WallhackEnabled = v end)
-yOffset = yOffset + 35
-CreateCheckbox(visualsContent, "Box ESP", yOffset, function() return Settings.BoxESP end, function(v) Settings.BoxESP = v end)
-yOffset = yOffset + 35
-CreateCheckbox(visualsContent, "Name ESP", yOffset, function() return Settings.NameESP end, function(v) Settings.NameESP = v end)
-yOffset = yOffset + 35
-CreateCheckbox(visualsContent, "Health Bar", yOffset, function() return Settings.HealthBar end, function(v) Settings.HealthBar = v end)
-yOffset = yOffset + 35
-CreateCheckbox(visualsContent, "Distance ESP", yOffset, function() return Settings.DistanceESP end, function(v) Settings.DistanceESP = v end)
-yOffset = yOffset + 35
-CreateCheckbox(visualsContent, "Snaplines", yOffset, function() return Settings.Snaplines end, function(v) Settings.Snaplines = v end)
-
--- ========== ВКЛАДКА MISC ==========
-local miscContent = ContentFrames["MISC"]
-yOffset = 0
-
-CreateCheckbox(miscContent, "Triggerbot", yOffset, function() return Settings.Triggerbot end, function(v) Settings.Triggerbot = v end)
-yOffset = yOffset + 35
-CreateSlider(miscContent, "Triggerbot Delay (s)", yOffset, 0, 0.5, function() return Settings.TriggerbotDelay end, function(v) Settings.TriggerbotDelay = v end, false)
-yOffset = yOffset + 55
-CreateCheckbox(miscContent, "Bunny Hop", yOffset, function() return Settings.BunnyHop end, function(v) Settings.BunnyHop = v end)
-yOffset = yOffset + 35
-CreateCheckbox(miscContent, "No Recoil", yOffset, function() return Settings.NoRecoil end, function(v) Settings.NoRecoil = v end)
-yOffset = yOffset + 35
-CreateCheckbox(miscContent, "No Spread", yOffset, function() return Settings.NoSpread end, function(v) Settings.NoSpread = v end)
-yOffset = yOffset + 35
-CreateCheckbox(miscContent, "Speed Hack", yOffset, function() return Settings.SpeedHack end, function(v) Settings.SpeedHack = v end)
-yOffset = yOffset + 35
-CreateSlider(miscContent, "Speed Value", yOffset, 16, 200, function() return Settings.SpeedValue end, function(v) Settings.SpeedValue = v end, true)
-
--- Обновление CanvasSize для скролла
-for _, content in pairs(ContentFrames) do
-    content.CanvasSize = UDim2.new(0, 0, 0, yOffset + 100)
+-- ========== AIMBOT (С FOV) ==========
+local function getClosestToCrosshair()
+    local closestDist = Settings.FOV
+    local target = nil
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    
+    for _, plr in ipairs(Players:GetPlayers()) do
+        if plr == LocalPlayer then continue end
+        if Settings.TeamCheck and plr.Team == LocalPlayer.Team then continue end
+        if not plr.Character then continue end
+        
+        local hum = plr.Character:FindFirstChild("Humanoid")
+        if not hum or hum.Health <= 0 then continue end
+        
+        local head = plr.Character:FindFirstChild("Head")
+        if not head then continue end
+        
+        local pos, onScreen = Camera:WorldToViewportPoint(head.Position)
+        if not onScreen then continue end
+        
+        local delta = (Vector2.new(pos.X, pos.Y) - screenCenter).Magnitude
+        if delta < closestDist then
+            closestDist = delta
+            target = plr
+        end
+    end
+    return target
 end
 
--- ========== ОТКРЫТИЕ/ЗАКРЫТИЕ МЕНЮ ПО INSERT ==========
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.KeyCode == Enum.KeyCode.Insert then
-        MainFrame.Visible = not MainFrame.Visible
+-- Автоматическое наведение при зажатой правой кнопке
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton2 and Settings.Aimbot then
+        local target = getClosestToCrosshair()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            local head = target.Character.Head
+            local targetScreen = Camera:WorldToViewportPoint(head.Position)
+            local targetVec = Vector2.new(targetScreen.X, targetScreen.Y)
+            local currentPos = UserInputService:GetMouseLocation()
+            local delta = (targetVec - currentPos) * (1 - Settings.Smoothness)
+            -- Симуляция движения мыши
+            local mt = getrawmetatable and getrawmetatable(game) or getmetatable(game)
+            local old = mt.__index
+            if old then
+                -- Обход через mousemoverel
+                pcall(function()
+                    mousemoverel(delta.X, delta.Y)
+                end)
+            end
+        end
     end
 end)
 
--- ========== ПЕРЕМЕЩЕНИЕ МЕНЮ (DRAG) ==========
-local dragging = false
-local dragStart
-local frameStart
+-- ========== ОТКРЫТИЕ МЕНЮ ПО INSERT ==========
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.Insert then
+        Settings.MenuOpen = not Settings.MenuOpen
+        MainFrame.Visible = Settings.MenuOpen
+    end
+end)
 
+-- ========== ПЕРЕМЕЩЕНИЕ ОКНА ==========
+local dragStartPos, dragStartMouse
 TitleBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        frameStart = MainFrame.Position
+        dragStartPos = MainFrame.Position
+        dragStartMouse = input.Position
     end
 end)
-
-TitleBar.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
-
 UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(frameStart.X.Scale, frameStart.X.Offset + delta.X, frameStart.Y.Scale, frameStart.Y.Offset + delta.Y)
+    if dragStartPos and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStartMouse
+        MainFrame.Position = UDim2.new(dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X, dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y)
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragStartPos = nil
     end
 end)
 
 -- ========== УВЕДОМЛЕНИЕ ==========
+log("Загружен! Нажмите INSERT для открытия меню")
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "SWILL Menu Loaded",
+    Title = "SWILL HUB",
     Text = "Нажмите INSERT для открытия меню",
     Duration = 3
 })
-
-print("SWILL: Графическое меню загружено. Нажмите Insert.")
