@@ -1,408 +1,390 @@
--- ========== ЗАГРУЗКА БИБЛИОТЕКИ ==========
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/OlegMongolRoblox/Hacks/refs/heads/main/1"))()
-local plr = game.Players.LocalPlayer
+-- SWILL: Полное меню для Wallhack + Aimbot (Roblox Lua)
+-- Активация: Insert (Ins) для открытия/закрытия меню
 
--- ========== ПЕРЕМЕННЫЕ БЕЗОПАСНОСТИ ==========
-local weaponGiven = false
-local shieldGiven = false
-local antiCheatDestroyed = false
-local soundBlocked = false
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+local Mouse = LocalPlayer:GetMouse()
 
--- ========== 1. ПОЛНОЕ УНИЧТОЖЕНИЕ АНТИЧИТА ==========
-local function destroyAntiCheat()
-    if antiCheatDestroyed then return true end
+-- ========== НАСТРОЙКИ ==========
+local Settings = {
+    -- Вкладка "AIMBOT"
+    AimbotEnabled = true,
+    AimbotFOV = 120,
+    AimbotSmoothness = 0.3,
+    AimbotKey = "Button2", -- Button1(левая), Button2(правая), Button3(средняя)
+    AimPart = "Head",      -- Head, Torso, HumanoidRootPart
+    VisibleCheck = false,
+    TeamCheck = true,
     
-    local success = true
+    -- Вкладка "VISUALS"
+    WallhackEnabled = true,
+    BoxESP = true,
+    NameESP = true,
+    HealthBar = true,
+    DistanceESP = true,
+    Snaplines = false,
+    ChamsColor = {r = 1, g = 0, b = 0}, -- Красный
+    GlowEnabled = false,
     
-    -- Уничтожение скриптов античита
-    for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("Script") or v:IsA("LocalScript") or v:IsA("ModuleScript") then
-            local name = v.Name:lower()
-            local badNames = {"anticheat", "antihack", "security", "protect", "guard", 
-                              "admin", "moder", "cheat", "detect", "monitor", "logger", 
-                              "report", "ban", "kick", "ac_", "anti", "hack"}
-            for _, bad in pairs(badNames) do
-                if name:find(bad) then
-                    pcall(function() v.Disabled = true end)
-                    pcall(function() v:Destroy() end)
-                    break
-                end
-            end
-        end
-        
-        -- Уничтожение удаленных событий
-        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            local name = v.Name:lower()
-            local badRemote = {"report", "log", "cheat", "hack", "detect", "ban", "kick", "anticheat"}
-            for _, bad in pairs(badRemote) do
-                if name:find(bad) then
-                    pcall(function() v:Destroy() end)
-                    break
-                end
-            end
-        end
-    end
-    
-    antiCheatDestroyed = true
-    return success
-end
-
--- ========== 2. БЛОКИРОВКА ЗВУКОВ (СКРИМЕРОВ) ==========
-local function blockAllSounds()
-    if soundBlocked then return end
-    
-    for _, v in pairs(game:GetDescendants()) do
-        if v:IsA("Sound") then
-            pcall(function()
-                v.Volume = 0
-                v.Playing = false
-                v:Stop()
-            end)
-        end
-    end
-    
-    soundBlocked = true
-end
-
--- ========== 3. ЗАЩИТА ОТ КИКА И БАНА ==========
-local function protectFromKick()
-    pcall(function()
-        game.Players.LocalPlayer.Kick = function() end
-    end)
-    
-    pcall(function()
-        local ts = game:GetService("TeleportService")
-        local oldTeleport = ts.Teleport
-        ts.Teleport = function(placeId, ...)
-            if placeId ~= game.PlaceId then
-                return nil
-            end
-            return oldTeleport(placeId, ...)
-        end
-    end)
-end
-
--- ========== 4. ПЕРЕХВАТ ЛОГОВ ==========
-local function interceptLogs()
-    pcall(function()
-        local oldPrint = print
-        print = function(...)
-            local args = {...}
-            local str = tostring(args)
-            if str:lower():find("cheat") or str:lower():find("hack") or 
-               str:lower():find("exploit") or str:lower():find("inject") then
-                return nil
-            end
-            return oldPrint(...)
-        end
-    end)
-end
-
--- ========== 5. БЕЗОПАСНАЯ ВЫДАЧА ПМ (БЕЗ ДЮПА) ==========
-local function safeGivePM()
-    if weaponGiven then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Безопасность",
-            Text = "ПМ уже выдан! Защита активна.",
-            Duration = 2
-        })
-        return
-    end
-    
-    -- Удаляем все копии ПМ перед выдачей
-    for _, tool in pairs(plr.Backpack:GetChildren()) do
-        if tool.Name == "ПМ" then
-            tool:Destroy()
-        end
-    end
-    for _, tool in pairs(plr.Character:GetChildren()) do
-        if tool.Name == "ПМ" then
-            tool:Destroy()
-        end
-    end
-    
-    -- Поиск ПМ
-    local weapon = nil
-    for _, v in pairs(game:GetDescendants()) do
-        if v.Name == "ПМ" and v:IsA("Tool") then
-            if v.Parent ~= plr.Backpack and v.Parent ~= plr.Character then
-                weapon = v
-                break
-            end
-        end
-    end
-    
-    if weapon then
-        weapon.Parent = plr.Backpack
-        weaponGiven = true
-        
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Безопасно",
-            Text = "ПМ выдан. Дюп невозможен.",
-            Duration = 2
-        })
-    else
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Ошибка",
-            Text = "ПМ не найден",
-            Duration = 2
-        })
-    end
-end
-
--- ========== 6. БЕЗОПАСНАЯ ВЫДАЧА ЩИТА ==========
-local function safeGiveShield()
-    if shieldGiven then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Безопасность",
-            Text = "Щит уже выдан! Защита активна.",
-            Duration = 2
-        })
-        return
-    end
-    
-    -- Удаляем все копии щита
-    for _, tool in pairs(plr.Backpack:GetChildren()) do
-        if tool.Name == "Щит" then
-            tool:Destroy()
-        end
-    end
-    for _, tool in pairs(plr.Character:GetChildren()) do
-        if tool.Name == "Щит" then
-            tool:Destroy()
-        end
-    end
-    
-    -- Поиск щита
-    local shield = nil
-    for _, v in pairs(game:GetDescendants()) do
-        if v.Name == "Щит" and v:IsA("Tool") then
-            if v.Parent ~= plr.Backpack and v.Parent ~= plr.Character then
-                shield = v
-                break
-            end
-        end
-    end
-    
-    if shield then
-        shield.Parent = plr.Backpack
-        shieldGiven = true
-        
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Безопасно",
-            Text = "Щит выдан. Дюп невозможен.",
-            Duration = 2
-        })
-    else
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Ошибка",
-            Text = "Щит не найден",
-            Duration = 2
-        })
-    end
-end
-
--- ========== 7. БЕСКОНЕЧНЫЕ ПАТРОНЫ (БЕЗОПАСНЫЕ) ==========
-local function safeInfiniteAmmo()
-    if not weaponGiven then
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Ошибка",
-            Text = "Сначала получите ПМ",
-            Duration = 2
-        })
-        return
-    end
-    
-    local weapon = nil
-    for _, tool in pairs(plr.Backpack:GetChildren()) do
-        if tool.Name == "ПМ" then weapon = tool break end
-    end
-    if not weapon then
-        for _, tool in pairs(plr.Character:GetChildren()) do
-            if tool.Name == "ПМ" then weapon = tool break end
-        end
-    end
-    
-    if weapon and weapon:FindFirstChild("RepValues") and weapon.RepValues:FindFirstChild("Mag") then
-        weapon.RepValues.Mag.Value = 99999999
-        
-        -- Цикл обновления для защиты от сброса
-        spawn(function()
-            while weaponGiven and weapon and weapon.Parent do
-                wait(0.5)
-                pcall(function()
-                    if weapon.RepValues and weapon.RepValues.Mag then
-                        if weapon.RepValues.Mag.Value < 99999999 then
-                            weapon.RepValues.Mag.Value = 99999999
-                        end
-                    end
-                end)
-            end
-        end)
-        
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Безопасно",
-            Text = "Бесконечные патроны активированы",
-            Duration = 2
-        })
-    end
-end
-
--- ========== 8. БЕЗОПАСНЫЙ ДЮП ФЕЙРВЕРКОВ ==========
-local function safeDupeFireworks()
-    pcall(function()
-        for _, v in pairs(game.Workspace:GetDescendants()) do
-            if v:IsA("ProximityPrompt") and v.Parent and v.Parent.Name == "FireworkGiver" then
-                v.Enabled = true
-                v.HoldDuration = 0
-                v.RequiresLineOfSight = false
-            end
-        end
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            plr.Character.HumanoidRootPart.CFrame = CFrame.new(-2406.3667, 7.48527145, 39.0829697)
-        end
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Безопасно",
-            Text = "Дюп фейрверков активирован",
-            Duration = 2
-        })
-    end)
-end
-
--- ========== 9. БЕЗОПАСНАЯ ВЫДАЧА КЛЮЧА ==========
-local function safeGiveKey()
-    pcall(function()
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            plr.Character.HumanoidRootPart.CFrame = CFrame.new(-3569.15649, 7.18634033, 343.490723)
-            wait(3)
-            plr.Character.HumanoidRootPart.CFrame = CFrame.new(-2374.53394, 2.56948352, -941.577026)
-            wait(3)
-            plr.Character.HumanoidRootPart.CFrame = CFrame.new(-3703.39429, 8.38206482, 2969.54565)
-            wait(2)
-            plr.Character.HumanoidRootPart.CFrame = CFrame.new(-2645.479, 7.42033577, -645.475952)
-        end
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Безопасно",
-            Text = "Ключ получен",
-            Duration = 2
-        })
-    end)
-end
-
--- ========== 10. ЗАПУСК ВСЕХ ЗАЩИТ ==========
-local function activateAllProtections()
-    destroyAntiCheat()
-    blockAllSounds()
-    protectFromKick()
-    interceptLogs()
-    
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Защита",
-        Text = "Максимальная безопасность активирована",
-        Duration = 3
-    })
-end
-
--- ========== ЗАПУСК ЗАЩИТ ПРИ ЗАГРУЗКЕ ==========
-spawn(function()
-    wait(1)
-    activateAllProtections()
-end)
-
--- ========== СОЗДАНИЕ МЕНЮ ==========
-local Window = Library.CreateLib("Prov Hub By Oleg Mongol and Blockrazz v.0.0.3", "RJTheme5")
-
--- ВКЛАДКА ТЕЛЕПОРТЫ
-local Teleport = Window:NewTab("Телепорты")
-local Tp = Teleport:NewSection("Телепорты")
-
-local teleports = {
-    {name = "Больница", pos = CFrame.new(-3394.24463, 5.05000019, 263.195526)},
-    {name = "Церковь", pos = CFrame.new(-2659.02637, 2.55033565, -739.766541)},
-    {name = "Мвд", pos = CFrame.new(-2852.2749, 18.6000004, 1110.59045)},
-    {name = "Мчс", pos = CFrame.new(-1886.40942, 2.70004678, 297.478699)},
-    {name = "Гаражи", pos = CFrame.new(-3253.19141, 7.5912075, -544.405945)},
-    {name = "Разветка Украины", pos = CFrame.new(-2057.31274, -17.4150505, -272.960266)},
-    {name = "Деревня", pos = CFrame.new(-2791.89429, 2.27600002, 2833.02954)},
-    {name = "Пятёрочка (Фейрверки)", pos = CFrame.new(-2406.3667, 7.48527145, 39.0829697)},
-    {name = "Авто вокзал", pos = CFrame.new(-2306.71484, 3.87504721, -2513.34033)},
-    {name = "Краны", pos = CFrame.new(-1882.00708, 3.11711454, -740.757935)},
-    {name = "На кран", pos = CFrame.new(-1966.4519, 110.70993, -745.091003)},
-    {name = "Выборы", pos = CFrame.new(-2382.19336, 83.4841003, 551.676147)},
-    {name = "Недострой", pos = CFrame.new(-2347.92944, 94.7500229, -710.446533)}
+    -- Вкладка "MISC"
+    Triggerbot = false,
+    TriggerbotDelay = 0.05,
+    BunnyHop = false,
+    NoRecoil = false,
+    NoSpread = false,
+    SpeedHack = false,
+    SpeedValue = 50
 }
 
-for _, tp in pairs(teleports) do
-    Tp:NewButton(tp.name, "Телепорт в " .. tp.name, function()
-        pcall(function()
-            if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-                plr.Character.HumanoidRootPart.CFrame = tp.pos
-            end
-        end)
+-- ========== СОЗДАНИЕ ГРАФИЧЕСКОГО МЕНЮ ==========
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SWILL_Menu"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService("CoreGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 500, 0, 400)
+MainFrame.Position = UDim2.new(0.5, -250, 0.5, -200)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+MainFrame.BackgroundTransparency = 0.05
+MainFrame.BorderSizePixel = 0
+MainFrame.Visible = false
+MainFrame.Parent = ScreenGui
+
+-- Заголовок
+local TitleBar = Instance.new("Frame")
+TitleBar.Size = UDim2.new(1, 0, 0, 35)
+TitleBar.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+TitleBar.BorderSizePixel = 0
+TitleBar.Parent = MainFrame
+
+local TitleText = Instance.new("TextLabel")
+TitleText.Size = UDim2.new(1, 0, 1, 0)
+TitleText.BackgroundTransparency = 1
+TitleText.Text = "SWILL HUB | ROBLOX"
+TitleText.TextColor3 = Color3.fromRGB(255, 100, 100)
+TitleText.TextSize = 18
+TitleText.Font = Enum.Font.GothamBold
+TitleText.TextXAlignment = Enum.TextXAlignment.Center
+TitleText.Parent = TitleBar
+
+-- Кнопка закрытия
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0, 30, 1, 0)
+CloseBtn.Position = UDim2.new(1, -30, 0, 0)
+CloseBtn.BackgroundTransparency = 1
+CloseBtn.Text = "X"
+CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseBtn.TextSize = 16
+CloseBtn.Parent = TitleBar
+CloseBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+end)
+
+-- Вкладки
+local TabContainer = Instance.new("Frame")
+TabContainer.Size = UDim2.new(1, 0, 0, 35)
+TabContainer.Position = UDim2.new(0, 0, 0, 35)
+TabContainer.BackgroundTransparency = 1
+TabContainer.Parent = MainFrame
+
+local Tabs = {"AIMBOT", "VISUALS", "MISC"}
+local SelectedTab = "AIMBOT"
+
+local TabButtons = {}
+local ContentFrames = {}
+
+for i, tabName in ipairs(Tabs) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 120, 1, 0)
+    btn.Position = UDim2.new(0, (i-1)*120, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+    btn.BackgroundTransparency = 0.3
+    btn.Text = tabName
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    btn.Font = Enum.Font.Gotham
+    btn.BorderSizePixel = 0
+    btn.Parent = TabContainer
+    
+    local content = Instance.new("ScrollingFrame")
+    content.Size = UDim2.new(1, -20, 1, -50)
+    content.Position = UDim2.new(0, 10, 0, 70)
+    content.BackgroundTransparency = 1
+    content.CanvasSize = UDim2.new(0, 0, 0, 0)
+    content.ScrollBarThickness = 6
+    content.Visible = (tabName == SelectedTab)
+    content.Parent = MainFrame
+    
+    TabButtons[tabName] = btn
+    ContentFrames[tabName] = content
+    
+    btn.MouseButton1Click:Connect(function()
+        SelectedTab = tabName
+        for name, frame in pairs(ContentFrames) do
+            frame.Visible = (name == tabName)
+        end
+        for name, button in pairs(TabButtons) do
+            button.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
+            button.BackgroundTransparency = 0.3
+        end
+        btn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+        btn.BackgroundTransparency = 0
     end)
 end
 
--- ВКЛАДКА ВЗЛОМЫ
-local Hacks = Window:NewTab("Взломы")
-local Hack = Hacks:NewSection("Взлом (Безопасный)")
+-- Вспомогательная функция для создания элементов меню
+local function CreateCheckbox(parent, text, yPos, getter, setter)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 30)
+    frame.Position = UDim2.new(0, 0, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    
+    local checkbox = Instance.new("ImageButton")
+    checkbox.Size = UDim2.new(0, 20, 0, 20)
+    checkbox.Position = UDim2.new(0, 5, 0.5, -10)
+    checkbox.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    checkbox.BorderSizePixel = 1
+    checkbox.Image = getter() and "rbxassetid://3926305904" or ""
+    checkbox.Parent = frame
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, -35, 1, 0)
+    label.Position = UDim2.new(0, 30, 0, 0)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 14
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    label.Parent = frame
+    
+    checkbox.MouseButton1Click:Connect(function()
+        setter(not getter())
+        checkbox.Image = getter() and "rbxassetid://3926305904" or ""
+    end)
+    
+    return frame
+end
 
-Hack:NewButton("Дюп фейрверков", "Безопасный дюп", function()
-    safeDupeFireworks()
+local function CreateSlider(parent, text, yPos, minVal, maxVal, getter, setter, isInt)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 50)
+    frame.Position = UDim2.new(0, 0, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = text .. ": " .. tostring(getter())
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 13
+    label.Parent = frame
+    
+    local slider = Instance.new("Frame")
+    slider.Size = UDim2.new(1, 0, 0, 4)
+    slider.Position = UDim2.new(0, 0, 0, 25)
+    slider.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+    slider.BorderSizePixel = 0
+    slider.Parent = frame
+    
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new((getter() - minVal) / (maxVal - minVal), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(255, 100, 100)
+    fill.BorderSizePixel = 0
+    fill.Parent = slider
+    
+    local knob = Instance.new("TextButton")
+    knob.Size = UDim2.new(0, 12, 0, 12)
+    knob.Position = UDim2.new((getter() - minVal) / (maxVal - minVal), -6, 0.5, -6)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.Text = ""
+    knob.BorderSizePixel = 0
+    knob.Parent = slider
+    
+    local dragging = false
+    knob.MouseButton1Down:Connect(function()
+        dragging = true
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            dragging = false
+        end
+    end)
+    knob.MouseMoved:Connect(function()
+        if dragging then
+            local mousePos = UserInputService:GetMouseLocation().X
+            local sliderPos = slider.AbsolutePosition.X
+            local sliderWidth = slider.AbsoluteSize.X
+            local percent = math.clamp((mousePos - sliderPos) / sliderWidth, 0, 1)
+            local value = minVal + percent * (maxVal - minVal)
+            if isInt then value = math.floor(value) end
+            setter(math.clamp(value, minVal, maxVal))
+            fill.Size = UDim2.new(percent, 0, 1, 0)
+            knob.Position = UDim2.new(percent, -6, 0.5, -6)
+            label.Text = text .. ": " .. tostring(getter())
+        end
+    end)
+    
+    return frame
+end
+
+local function CreateDropdown(parent, text, yPos, options, getter, setter)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 40)
+    frame.Position = UDim2.new(0, 0, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = parent
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0, 20)
+    label.BackgroundTransparency = 1
+    label.Text = text
+    label.TextColor3 = Color3.fromRGB(220, 220, 220)
+    label.TextSize = 13
+    label.Parent = frame
+    
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 150, 0, 25)
+    btn.Position = UDim2.new(0, 0, 0, 20)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    btn.Text = getter()
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 12
+    btn.Parent = frame
+    
+    local dropdown = Instance.new("Frame")
+    dropdown.Size = UDim2.new(0, 150, 0, #options * 25)
+    dropdown.Position = UDim2.new(0, 0, 0, 45)
+    dropdown.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    dropdown.Visible = false
+    dropdown.Parent = frame
+    
+    for i, opt in ipairs(options) do
+        local optBtn = Instance.new("TextButton")
+        optBtn.Size = UDim2.new(1, 0, 0, 25)
+        optBtn.Position = UDim2.new(0, 0, 0, (i-1)*25)
+        optBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 65)
+        optBtn.Text = opt
+        optBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        optBtn.TextSize = 12
+        optBtn.Parent = dropdown
+        optBtn.MouseButton1Click:Connect(function()
+            setter(opt)
+            btn.Text = opt
+            dropdown.Visible = false
+        end)
+    end
+    
+    btn.MouseButton1Click:Connect(function()
+        dropdown.Visible = not dropdown.Visible
+    end)
+    
+    return frame
+end
+
+-- ========== ЗАПОЛНЕНИЕ ВКЛАДКИ AIMBOT ==========
+local aimbotContent = ContentFrames["AIMBOT"]
+local yOffset = 0
+
+CreateCheckbox(aimbotContent, "Enable Aimbot", yOffset, function() return Settings.AimbotEnabled end, function(v) Settings.AimbotEnabled = v end)
+yOffset = yOffset + 35
+CreateSlider(aimbotContent, "FOV (Degrees)", yOffset, 10, 360, function() return Settings.AimbotFOV end, function(v) Settings.AimbotFOV = v end, true)
+yOffset = yOffset + 55
+CreateSlider(aimbotContent, "Smoothness", yOffset, 0, 1, function() return Settings.AimbotSmoothness end, function(v) Settings.AimbotSmoothness = v end, false)
+yOffset = yOffset + 55
+CreateDropdown(aimbotContent, "Aim Key", yOffset, {"Button1", "Button2", "Button3"}, function() return Settings.AimbotKey end, function(v) Settings.AimbotKey = v end)
+yOffset = yOffset + 45
+CreateDropdown(aimbotContent, "Aim Part", yOffset, {"Head", "Torso", "HumanoidRootPart"}, function() return Settings.AimPart end, function(v) Settings.AimPart = v end)
+yOffset = yOffset + 45
+CreateCheckbox(aimbotContent, "Visible Check", yOffset, function() return Settings.VisibleCheck end, function(v) Settings.VisibleCheck = v end)
+yOffset = yOffset + 35
+CreateCheckbox(aimbotContent, "Team Check", yOffset, function() return Settings.TeamCheck end, function(v) Settings.TeamCheck = v end)
+
+-- ========== ВКЛАДКА VISUALS ==========
+local visualsContent = ContentFrames["VISUALS"]
+yOffset = 0
+
+CreateCheckbox(visualsContent, "Wallhack (Glow)", yOffset, function() return Settings.WallhackEnabled end, function(v) Settings.WallhackEnabled = v end)
+yOffset = yOffset + 35
+CreateCheckbox(visualsContent, "Box ESP", yOffset, function() return Settings.BoxESP end, function(v) Settings.BoxESP = v end)
+yOffset = yOffset + 35
+CreateCheckbox(visualsContent, "Name ESP", yOffset, function() return Settings.NameESP end, function(v) Settings.NameESP = v end)
+yOffset = yOffset + 35
+CreateCheckbox(visualsContent, "Health Bar", yOffset, function() return Settings.HealthBar end, function(v) Settings.HealthBar = v end)
+yOffset = yOffset + 35
+CreateCheckbox(visualsContent, "Distance ESP", yOffset, function() return Settings.DistanceESP end, function(v) Settings.DistanceESP = v end)
+yOffset = yOffset + 35
+CreateCheckbox(visualsContent, "Snaplines", yOffset, function() return Settings.Snaplines end, function(v) Settings.Snaplines = v end)
+
+-- ========== ВКЛАДКА MISC ==========
+local miscContent = ContentFrames["MISC"]
+yOffset = 0
+
+CreateCheckbox(miscContent, "Triggerbot", yOffset, function() return Settings.Triggerbot end, function(v) Settings.Triggerbot = v end)
+yOffset = yOffset + 35
+CreateSlider(miscContent, "Triggerbot Delay (s)", yOffset, 0, 0.5, function() return Settings.TriggerbotDelay end, function(v) Settings.TriggerbotDelay = v end, false)
+yOffset = yOffset + 55
+CreateCheckbox(miscContent, "Bunny Hop", yOffset, function() return Settings.BunnyHop end, function(v) Settings.BunnyHop = v end)
+yOffset = yOffset + 35
+CreateCheckbox(miscContent, "No Recoil", yOffset, function() return Settings.NoRecoil end, function(v) Settings.NoRecoil = v end)
+yOffset = yOffset + 35
+CreateCheckbox(miscContent, "No Spread", yOffset, function() return Settings.NoSpread end, function(v) Settings.NoSpread = v end)
+yOffset = yOffset + 35
+CreateCheckbox(miscContent, "Speed Hack", yOffset, function() return Settings.SpeedHack end, function(v) Settings.SpeedHack = v end)
+yOffset = yOffset + 35
+CreateSlider(miscContent, "Speed Value", yOffset, 16, 200, function() return Settings.SpeedValue end, function(v) Settings.SpeedValue = v end, true)
+
+-- Обновление CanvasSize для скролла
+for _, content in pairs(ContentFrames) do
+    content.CanvasSize = UDim2.new(0, 0, 0, yOffset + 100)
+end
+
+-- ========== ОТКРЫТИЕ/ЗАКРЫТИЕ МЕНЮ ПО INSERT ==========
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Insert then
+        MainFrame.Visible = not MainFrame.Visible
+    end
 end)
 
-Hack:NewButton("Выдача ПМ (1 раз)", "Без дюпа, безопасно", function()
-    safeGivePM()
+-- ========== ПЕРЕМЕЩЕНИЕ МЕНЮ (DRAG) ==========
+local dragging = false
+local dragStart
+local frameStart
+
+TitleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        dragStart = input.Position
+        frameStart = MainFrame.Position
+    end
 end)
 
-Hack:NewButton("Бесконечные патроны", "Для выданного ПМ", function()
-    safeInfiniteAmmo()
+TitleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
 end)
 
-Hack:NewButton("Выдача ЩИТ (1 раз)", "Без дюпа, безопасно", function()
-    safeGiveShield()
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        MainFrame.Position = UDim2.new(frameStart.X.Scale, frameStart.X.Offset + delta.X, frameStart.Y.Scale, frameStart.Y.Offset + delta.Y)
+    end
 end)
 
-Hack:NewButton("Выдача секретного ключа", "Открывает люки", function()
-    safeGiveKey()
-end)
-
--- ВКЛАДКА ЗАЩИТА
-local Protection = Window:NewTab("Защита")
-local Prot = Protection:NewSection("Анти-детект")
-
-Prot:NewButton("Активировать защиту", "Максимальная безопасность", function()
-    activateAllProtections()
-end)
-
-Prot:NewButton("Уничтожить античит", "Удалить все скрипты защиты", function()
-    destroyAntiCheat()
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Защита",
-        Text = "Античит уничтожен",
-        Duration = 2
-    })
-end)
-
--- ВКЛАДКА СОЗДАТЕЛИ
-local Creator = Window:NewTab("Создатели")
-local Creators = Creator:NewSection("Создатели")
-
-Creators:NewButton("Oleg Mongol", "Идея Гуи", function()
-    print("Oleg Mongol")
-end)
-
-Creators:NewButton("Blockrazz", "Скриптинг", function()
-    print("Blockrazz")
-end)
-
--- ========== ФИНАЛЬНОЕ СООБЩЕНИЕ ==========
+-- ========== УВЕДОМЛЕНИЕ ==========
 game:GetService("StarterGui"):SetCore("SendNotification", {
-    Title = "Prov Hub",
-    Text = "Защита активирована! Дюп оружия невозможен.",
-    Duration = 4
+    Title = "SWILL Menu Loaded",
+    Text = "Нажмите INSERT для открытия меню",
+    Duration = 3
 })
 
-print("[✔] Prov Hub загружен")
-print("[✔] Максимальная безопасность активирована")
-print("[✔] Античит уничтожен")
-print("[✔] Дюп оружия невозможен")
+print("SWILL: Графическое меню загружено. Нажмите Insert.")
