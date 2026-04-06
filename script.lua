@@ -1,5 +1,5 @@
--- SWILL: 2D BOX ESP + AIMBOT для XENO (РАБОЧАЯ ВЕРСИЯ)
--- МЕНЮ: INSERT | АИМ: АВТОМАТИЧЕСКИ ПРИ ВЫСТРЕЛЕ
+-- SWILL: COUNTER BLOX - 2D ESP + AIMBOT + BUNNYHOP
+-- МЕНЮ: INSERT
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -11,135 +11,118 @@ local Mouse = LocalPlayer:GetMouse()
 -- ========== НАСТРОЙКИ ==========
 local Settings = {
     Aimbot = true,
-    BoxESP = true,
-    FOV = 250,
+    ESP = true,
+    BunnyHop = true,
+    FOV = 200,
     TeamCheck = true
 }
 
--- ========== 2D BOX ESP (РИСУЕТСЯ НА ЭКРАНЕ) ==========
-local ESPFolder = Instance.new("Folder")
-ESPFolder.Name = "SWILL_2D_ESP"
-pcall(function() ESPFolder.Parent = game:GetService("CoreGui") end)
-if not ESPFolder.Parent then
-    pcall(function() ESPFolder.Parent = LocalPlayer:WaitForChild("PlayerGui") end)
-end
+-- ========== 2D BOX ESP (ЧЕРЕЗ DRAWING API XENO) ==========
+local ESPObjects = {}
 
--- Функция для создания 2D бокса
 local function Create2DBox(player)
     if player == LocalPlayer then return end
     
-    local container = Instance.new("Frame")
-    container.Name = player.Name
-    container.Size = UDim2.new(0, 0, 0, 0)
-    container.Position = UDim2.new(0, 0, 0, 0)
-    container.BackgroundTransparency = 1
-    container.Visible = true
-    container.Parent = ESPFolder
+    local objects = {
+        box = Drawing.new("Square"),
+        name = Drawing.new("Text"),
+        health = Drawing.new("Text"),
+        healthBar = Drawing.new("Line")
+    }
     
-    -- Рамка
-    local box = Instance.new("Frame")
-    box.Name = "Box"
-    box.Size = UDim2.new(0, 80, 0, 100)
-    box.BackgroundTransparency = 1
-    box.BorderSizePixel = 2
-    box.BorderColor3 = Color3.fromRGB(255, 0, 0)
-    box.Parent = container
+    objects.box.Visible = false
+    objects.box.Thickness = 2
+    objects.box.Color = 0xFF0000FF
+    objects.box.Filled = false
     
-    -- Имя игрока
-    local nameLabel = Instance.new("TextLabel")
-    nameLabel.Name = "Name"
-    nameLabel.Size = UDim2.new(0, 80, 0, 16)
-    nameLabel.Position = UDim2.new(0, 0, 0, -16)
-    nameLabel.BackgroundTransparency = 1
-    nameLabel.Text = player.Name
-    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    nameLabel.TextSize = 11
-    nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextXAlignment = Enum.TextXAlignment.Center
-    nameLabel.Parent = container
+    objects.name.Visible = false
+    objects.name.Size = 14
+    objects.name.Center = true
+    objects.name.Color = 0xFFFFFFFF
     
-    -- Полоска здоровья
-    local healthBar = Instance.new("Frame")
-    healthBar.Name = "Health"
-    healthBar.Size = UDim2.new(1, 0, 0, 4)
-    healthBar.Position = UDim2.new(0, 0, 1, 2)
-    healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-    healthBar.BorderSizePixel = 0
-    healthBar.Parent = box
+    objects.health.Visible = false
+    objects.health.Size = 11
+    objects.health.Center = true
+    objects.health.Color = 0xFFFFFFFF
     
-    local healthBg = Instance.new("Frame")
-    healthBg.Size = UDim2.new(1, 0, 1, 0)
-    healthBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    healthBg.BorderSizePixel = 0
-    healthBg.Parent = healthBar
+    objects.healthBar.Visible = false
+    objects.healthBar.Thickness = 3
+    objects.healthBar.Color = 0x00FF00FF
     
-    -- Обновление позиции и размеров
+    ESPObjects[player] = objects
+    
     local function Update()
-        if not player.Character then
-            container.Visible = false
+        if not Settings.ESP or not player.Character then
+            objects.box.Visible = false
+            objects.name.Visible = false
+            objects.health.Visible = false
+            objects.healthBar.Visible = false
             return
         end
         
         local humanoid = player.Character:FindFirstChild("Humanoid")
         if not humanoid or humanoid.Health <= 0 then
-            container.Visible = false
+            objects.box.Visible = false
+            objects.name.Visible = false
+            objects.health.Visible = false
+            objects.healthBar.Visible = false
             return
         end
         
-        local rootPart = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Head")
-        if not rootPart then
-            container.Visible = false
-            return
-        end
+        local root = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Head")
+        if not root then return end
         
-        -- Получаем позицию на экране
-        local screenPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
+        local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
         if not onScreen then
-            container.Visible = false
+            objects.box.Visible = false
+            objects.name.Visible = false
+            objects.health.Visible = false
+            objects.healthBar.Visible = false
             return
         end
         
-        -- Вычисляем размер бокса (дистанция влияет на размер)
-        local dist = (Camera.CFrame.Position - rootPart.Position).Magnitude
-        local boxHeight = math.clamp(3000 / dist, 40, 150)
-        local boxWidth = boxHeight * 0.7
+        local dist = (Camera.CFrame.Position - root.Position).Magnitude
+        local boxHeight = math.clamp(2000 / dist, 40, 120)
+        local boxWidth = boxHeight * 0.65
         
-        -- Позиция бокса (центр - низ)
-        local yOffset = boxHeight / 2 + 20
-        local x = screenPos.X - boxWidth / 2
-        local y = screenPos.Y - yOffset
+        local x = pos.X - boxWidth / 2
+        local y = pos.Y - boxHeight / 2
         
-        -- Обновляем рамку
-        box.Size = UDim2.new(0, boxWidth, 0, boxHeight)
-        box.Position = UDim2.new(0, x, 0, y)
+        -- Рамка
+        objects.box.Size = Vector2.new(boxWidth, boxHeight)
+        objects.box.Position = Vector2.new(x, y)
+        objects.box.Visible = true
         
-        -- Обновляем имя
-        nameLabel.Size = UDim2.new(0, boxWidth, 0, 16)
-        nameLabel.Position = UDim2.new(0, 0, 0, -16)
-        nameLabel.Text = player.Name .. " [" .. math.floor(humanoid.Health) .. "]"
+        -- Цвет рамки от здоровья
+        local hp = humanoid.Health
+        local r = 255 - (hp * 2.55)
+        local g = hp * 2.55
+        local color = r * 65536 + g * 256 + 0
+        objects.box.Color = color
         
-        -- Обновляем здоровье
-        local hpPercent = math.clamp(humanoid.Health / 100, 0, 1)
-        healthBar.Size = UDim2.new(hpPercent, 0, 0, 4)
+        -- Имя
+        objects.name.Text = player.Name .. " [" .. math.floor(hp) .. "]"
+        objects.name.Position = Vector2.new(pos.X, y - 15)
+        objects.name.Visible = true
+        objects.name.Color = color
         
-        -- Цвет в зависимости от здоровья
-        local r = 255 - (humanoid.Health * 2.55)
-        local g = humanoid.Health * 2.55
-        box.BorderColor3 = Color3.fromRGB(r, g, 0)
-        healthBar.BackgroundColor3 = Color3.fromRGB(r, g, 0)
-        nameLabel.TextColor3 = Color3.fromRGB(r, g, 0)
-        
-        -- Цвет рамки для своей команды (опционально)
-        if Settings.TeamCheck and player.Team == LocalPlayer.Team then
-            box.BorderColor3 = Color3.fromRGB(0, 100, 255)
-            nameLabel.TextColor3 = Color3.fromRGB(0, 100, 255)
-        end
-        
-        container.Visible = Settings.BoxESP
+        -- Полоска здоровья
+        local hpPercent = hp / 100
+        local barX = x
+        local barY = y + boxHeight + 2
+        objects.healthBar.From = Vector2.new(barX, barY)
+        objects.healthBar.To = Vector2.new(barX + (boxWidth * hpPercent), barY)
+        objects.healthBar.Visible = true
+        objects.healthBar.Color = color
     end
     
     player.CharacterAdded:Connect(Update)
-    player.CharacterRemoving:Connect(function() container.Visible = false end)
+    player.CharacterRemoving:Connect(function()
+        objects.box.Visible = false
+        objects.name.Visible = false
+        objects.health.Visible = false
+        objects.healthBar.Visible = false
+    end)
     RunService.RenderStepped:Connect(Update)
     Update()
 end
@@ -150,7 +133,17 @@ for _, plr in ipairs(Players:GetPlayers()) do
 end
 Players.PlayerAdded:Connect(Create2DBox)
 
--- ========== AIMBOT (ПРИ ВЫСТРЕЛЕ) ==========
+-- Очистка при удалении игрока
+Players.PlayerRemoving:Connect(function(player)
+    if ESPObjects[player] then
+        for _, obj in pairs(ESPObjects[player]) do
+            obj:Remove()
+        end
+        ESPObjects[player] = nil
+    end
+end)
+
+-- ========== AIMBOT (ЧЕРЕЗ CFrame) ==========
 local function GetClosestEnemy()
     local closestDist = Settings.FOV
     local closestPlayer = nil
@@ -179,7 +172,8 @@ local function GetClosestEnemy()
     return closestPlayer
 end
 
--- Аим через поворот камеры (без движения мыши)
+-- Аим при выстреле (левая кнопка)
+local lastShot = 0
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 and Settings.Aimbot then
@@ -196,6 +190,26 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
+-- ========== BUNNY HOP (АВТОПРЫЖОК) ==========
+local function BunnyHop()
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    
+    if humanoid.FloorMaterial ~= Enum.Material.Air then
+        humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode == Enum.KeyCode.Space and Settings.BunnyHop then
+        BunnyHop()
+    end
+end)
+
 -- ========== ПРОСТОЕ МЕНЮ ==========
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "SWILL_Menu"
@@ -205,8 +219,8 @@ if not ScreenGui.Parent then
 end
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 280, 0, 150)
-MainFrame.Position = UDim2.new(0.5, -140, 0.5, -75)
+MainFrame.Size = UDim2.new(0, 300, 0, 200)
+MainFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 1
@@ -235,46 +249,29 @@ CloseBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
 end)
 
-local AimBtn = Instance.new("TextButton")
-AimBtn.Size = UDim2.new(0, 120, 0, 35)
-AimBtn.Position = UDim2.new(0.5, -130, 0, 50)
-AimBtn.BackgroundColor3 = Settings.Aimbot and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(50, 50, 65)
-AimBtn.Text = "AIMBOT: " .. (Settings.Aimbot and "ON" or "OFF")
-AimBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-AimBtn.TextSize = 14
-AimBtn.Parent = MainFrame
-AimBtn.MouseButton1Click:Connect(function()
-    Settings.Aimbot = not Settings.Aimbot
-    AimBtn.Text = "AIMBOT: " .. (Settings.Aimbot and "ON" or "OFF")
-    AimBtn.BackgroundColor3 = Settings.Aimbot and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(50, 50, 65)
-end)
+local function CreateButton(text, y, getter, setter)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 130, 0, 35)
+    btn.Position = UDim2.new(0.5, -65, 0, y)
+    btn.BackgroundColor3 = getter() and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(50, 50, 65)
+    btn.Text = text .. ": " .. (getter() and "ON" or "OFF")
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 14
+    btn.Parent = MainFrame
+    btn.MouseButton1Click:Connect(function()
+        setter(not getter())
+        btn.Text = text .. ": " .. (getter() and "ON" or "OFF")
+        btn.BackgroundColor3 = getter() and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(50, 50, 65)
+    end)
+    return btn
+end
 
-local ESPBtn = Instance.new("TextButton")
-ESPBtn.Size = UDim2.new(0, 120, 0, 35)
-ESPBtn.Position = UDim2.new(0.5, 10, 0, 50)
-ESPBtn.BackgroundColor3 = Settings.BoxESP and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(50, 50, 65)
-ESPBtn.Text = "2D BOX ESP: " .. (Settings.BoxESP and "ON" or "OFF")
-ESPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ESPBtn.TextSize = 14
-ESPBtn.Parent = MainFrame
-ESPBtn.MouseButton1Click:Connect(function()
-    Settings.BoxESP = not Settings.BoxESP
-    ESPBtn.Text = "2D BOX ESP: " .. (Settings.BoxESP and "ON" or "OFF")
-    ESPBtn.BackgroundColor3 = Settings.BoxESP and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(50, 50, 65)
-end)
-
-local FOVLabel = Instance.new("TextLabel")
-FOVLabel.Size = UDim2.new(0, 250, 0, 20)
-FOVLabel.Position = UDim2.new(0.5, -125, 0, 100)
-FOVLabel.BackgroundTransparency = 1
-FOVLabel.Text = "FOV: " .. Settings.FOV
-FOVLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-FOVLabel.TextSize = 12
-FOVLabel.Parent = MainFrame
+CreateButton("AIMBOT", 45, function() return Settings.Aimbot end, function(v) Settings.Aimbot = v end)
+CreateButton("2D ESP", 90, function() return Settings.ESP end, function(v) Settings.ESP = v end)
+CreateButton("BUNNY HOP", 135, function() return Settings.BunnyHop end, function(v) Settings.BunnyHop = v end)
 
 -- Открытие меню
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
+UserInputService.InputBegan:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.Insert then
         MainFrame.Visible = not MainFrame.Visible
     end
@@ -302,35 +299,37 @@ end)
 
 -- ========== ИНДИКАТОР ==========
 local Indicator = Instance.new("TextLabel")
-Indicator.Size = UDim2.new(0, 250, 0, 25)
-Indicator.Position = UDim2.new(0.5, -125, 0, 5)
+Indicator.Size = UDim2.new(0, 300, 0, 25)
+Indicator.Position = UDim2.new(0.5, -150, 0, 5)
 Indicator.BackgroundTransparency = 0.6
 Indicator.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-Indicator.Text = "SWILL: AIM ON | 2D ESP ON"
+Indicator.Text = "SWILL: AIM ON | ESP ON | BHOP ON"
 Indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
 Indicator.TextSize = 12
 Indicator.Font = Enum.Font.GothamBold
 Indicator.Parent = ScreenGui
 
 spawn(function()
-    while wait(0.5) do
-        Indicator.Text = "SWILL: AIM " .. (Settings.Aimbot and "ON" or "OFF") .. " | 2D ESP " .. (Settings.BoxESP and "ON" or "OFF")
-        Indicator.TextColor3 = Settings.Aimbot and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    while wait(0.3) do
+        Indicator.Text = "SWILL: AIM " .. (Settings.Aimbot and "ON" or "OFF") .. " | ESP " .. (Settings.ESP and "ON" or "OFF") .. " | BHOP " .. (Settings.BunnyHop and "ON" or "OFF")
+        local anyOn = Settings.Aimbot or Settings.ESP or Settings.BunnyHop
+        Indicator.TextColor3 = anyOn and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
     end
 end)
 
 -- ========== УВЕДОМЛЕНИЕ ==========
+print("========================================")
+print("SWILL ЗАГРУЖЕН ДЛЯ COUNTER BLOX")
+print("2D ESP - прямоугольники на экране")
+print("AIMBOT - автоматически при выстреле")
+print("BUNNY HOP - зажми ПРОБЕЛ")
+print("МЕНЮ - клавиша INSERT")
+print("========================================")
+
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
         Title = "SWILL",
-        Text = "Загружен! Нажми INSERT для меню | 2D Box ESP + Aimbot",
+        Text = "Загружен! INSERT меню | 2D ESP + AIM + BHOP",
         Duration = 4
     })
 end)
-
-print("========================================")
-print("SWILL ЗАГРУЖЕН!")
-print("2D BOX ESP - прямоугольники вокруг игроков")
-print("AIMBOT - автоматически при выстреле")
-print("МЕНЮ - клавиша INSERT")
-print("========================================")
