@@ -1,5 +1,5 @@
--- SWILL: TRUE SILENT AIM для XENO + FLICK (БЕЗ ДЕРГАНЬЯ)
--- Мышь НЕ двигается вообще. Пули сами летят в голову.
+-- SWILL: TRUE SILENT AIM для XENO + FLICK (БЕЗ ДВИЖЕНИЯ КАМЕРЫ И МЫШИ)
+-- Мышь НЕ двигается. Камера НЕ двигается. Пули сами меняют траекторию.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -10,7 +10,7 @@ local Camera = workspace.CurrentCamera
 -- ========== НАСТРОЙКИ ==========
 local Settings = {
     Enabled = true,
-    FOV = 360,  -- Максимальный FOV для теста
+    FOV = 360,
     AimPart = "Head",
     TeamCheck = true
 }
@@ -78,97 +78,128 @@ local function GetClosestEnemy()
     return closestPlayer
 end
 
--- ========== TRUE SILENT AIM (БЕЗ ДВИЖЕНИЯ МЫШИ) ==========
--- Метод: Перехватываем направление выстрела и подменяем луч
+-- ========== TRUE SILENT AIM (ПОДМЕНА ЛУЧА) ==========
+-- Сохраняем оригинальные функции
+local originalFindPartOnRay = workspace.FindPartOnRay
+local originalRaycast = workspace.Raycast
+local originalWorldRootRaycast = game:GetService("Workspace").Raycast
 
-local originalRaycast = workspace.FindPartOnRay or workspace.Raycast
+-- Переменная для хранения цели
+local currentTarget = nil
+local currentTargetPart = nil
 
--- Для игр с инструментами (оружие)
-local function GetCurrentWeapon()
-    local char = LocalPlayer.Character
-    if not char then return nil end
-    return char:FindFirstChildWhichIsA("Tool")
-end
-
--- Подмена направления выстрела
-local function SilentShoot(target)
-    if not target or not target.Character then return false end
-    
-    local aimPart = target.Character:FindFirstChild(Settings.AimPart) or target.Character:FindFirstChild("Head")
-    if not aimPart then return false end
-    
-    local weapon = GetCurrentWeapon()
-    if not weapon then return false end
-    
-    -- Сохраняем текущее направление камеры
-    local originalCF = Camera.CFrame
-    
-    -- Временно поворачиваем камеру на цель (без визуального эффекта)
-    Camera.CFrame = CFrame.new(originalCF.Position, aimPart.Position)
-    
-    -- Делаем выстрел
-    local success = false
-    pcall(function()
-        -- Эмулируем нажатие ЛКМ
-        local mouse = LocalPlayer:GetMouse()
-        mouse.Button1Down()
-        task.wait(0.01)
-        mouse.Button1Up()
-        success = true
-    end)
-    
-    -- Возвращаем камеру
-    Camera.CFrame = originalCF
-    
-    return success
-end
-
--- Перехват выстрела
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and Settings.Enabled then
+-- Обновляем цель каждый кадр
+RunService.RenderStepped:Connect(function()
+    if Settings.Enabled then
         local target = GetClosestEnemy()
-        if target then
-            SilentShoot(target)
+        if target and target.Character then
+            currentTarget = target
+            currentTargetPart = target.Character:FindFirstChild(Settings.AimPart) or target.Character:FindFirstChild("Head") or target.Character:FindFirstChild("HumanoidRootPart")
+        else
+            currentTarget = nil
+            currentTargetPart = nil
+        end
+    else
+        currentTarget = nil
+        currentTargetPart = nil
+    end
+end)
+
+-- Перехват Raycast (главный метод)
+local function hookedRaycast(origin, direction, ...)
+    if Settings.Enabled and currentTargetPart then
+        -- Вычисляем направление на цель
+        local targetDirection = (currentTargetPart.Position - origin).Unit
+        -- Подменяем направление луча на цель
+        return originalRaycast(workspace, origin, targetDirection * 1000, ...)
+    end
+    return originalRaycast(workspace, origin, direction, ...)
+end
+
+-- Перехват FindPartOnRay
+local function hookedFindPartOnRay(ray, ...)
+    if Settings.Enabled and currentTargetPart then
+        local targetDirection = (currentTargetPart.Position - ray.Origin).Unit
+        local newRay = Ray.new(ray.Origin, targetDirection * 1000)
+        return originalFindPartOnRay(workspace, newRay, ...)
+    end
+    return originalFindPartOnRay(workspace, ray, ...)
+end
+
+-- Применяем хуки (если функции существуют)
+pcall(function()
+    workspace.Raycast = hookedRaycast
+end)
+pcall(function()
+    workspace.FindPartOnRay = hookedFindPartOnRay
+end)
+
+-- ========== АЛЬТЕРНАТИВНЫЙ МЕТОД ДЛЯ FLICK ==========
+-- В Flick выстрелы часто идут через инструменты
+local function HookWeapon(weapon)
+    if not weapon then return end
+    
+    -- Ищем функцию выстрела
+    for _, v in pairs(getgc(true)) do
+        if type(v) == "function" then
+            local info = debug.getinfo(v)
+            if info and (info.name == "Fire" or info.name == "Shoot" or string.find(info.name or "", "shoot")) then
+                local old = v
+                debug.setupvalue(v, 1, function(...)
+                    if Settings.Enabled and currentTargetPart then
+                        local args = {...}
+                        args[2] = currentTargetPart.Position
+                        args[3] = currentTargetPart
+                        return old(unpack(args))
+                    end
+                    return old(...)
+                end)
+            end
+        end
+    end
+end
+
+-- Отслеживаем появление оружия
+LocalPlayer.CharacterAdded:Connect(function(char)
+    task.wait(0.5)
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") then
+            HookWeapon(tool)
         end
     end
 end)
 
--- ========== АЛЬТЕРНАТИВНЫЙ МЕТОД (если верхний не работает) ==========
--- Через RemoteEvent (для некоторых игр)
-local function AlternativeSilentAim()
-    local target = GetClosestEnemy()
-    if not target then return end
-    
-    local aimPart = target.Character:FindFirstChild(Settings.AimPart) or target.Character:FindFirstChild("Head")
-    if not aimPart then return end
-    
-    -- Ищем remote для выстрела
-    local playerGui = LocalPlayer.PlayerGui
-    local remotes = {}
-    
-    local function findRemotes(obj)
-        for _, v in ipairs(obj:GetChildren()) do
-            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-                table.insert(remotes, v)
-            end
-            findRemotes(v)
-        end
-    end
-    
-    pcall(function() findRemotes(playerGui) end)
-    pcall(function() findRemotes(LocalPlayer.Character) end)
-    pcall(function() findRemotes(game:GetService("ReplicatedStorage")) end)
-    
-    -- Пытаемся найти remote выстрела
-    for _, remote in ipairs(remotes) do
-        if remote.Name:lower():match("shoot") or remote.Name:lower():match("fire") or remote.Name:lower():match("damage") then
-            pcall(function()
-                remote:FireServer(aimPart.Position, aimPart)
-            end)
+if LocalPlayer.Character then
+    for _, tool in ipairs(LocalPlayer.Character:GetChildren()) do
+        if tool:IsA("Tool") then
+            HookWeapon(tool)
         end
     end
 end
+
+-- ========== ДОПОЛНИТЕЛЬНО: БЛОКИРОВКА ОТДАЧИ ==========
+local function NoRecoil()
+    local char = LocalPlayer.Character
+    if not char then return end
+    
+    -- Блокируем отдачу камеры
+    local hum = char:FindFirstChild("Humanoid")
+    if hum then
+        hum.CameraOffset = Vector3.new(0, 0, 0)
+    end
+    
+    -- Блокируем тряску оружия
+    local tool = char:FindFirstChildWhichIsA("Tool")
+    if tool then
+        for _, v in ipairs(tool:GetDescendants()) do
+            if v:IsA("AnimationTrack") then
+                pcall(function() v:Stop() end)
+            end
+        end
+    end
+end
+
+RunService.RenderStepped:Connect(NoRecoil)
 
 -- ========== ЧАТ-КОМАНДЫ ==========
 local function SendChat(msg)
@@ -185,7 +216,7 @@ local function HandleCommand(cmd)
     cmd = string.lower(cmd)
     if cmd == ";aim on" then
         Settings.Enabled = true
-        SendChat("Silent Aim ВКЛЮЧЕН (без дерганья)")
+        SendChat("Silent Aim ВКЛЮЧЕН (луч подменён, мышь не двигается)")
     elseif cmd == ";aim off" then
         Settings.Enabled = false
         SendChat("Silent Aim ВЫКЛЮЧЕН")
@@ -196,48 +227,49 @@ local function HandleCommand(cmd)
             SendChat("FOV: " .. fov)
         end
     elseif cmd == ";help" then
-        SendChat("Команды: ;aim on/off, ;fov 180")
+        SendChat("Команды: ;aim on/off, ;fov 180 | Мышь и камера НЕ двигаются")
     end
 end
 
 pcall(function() LocalPlayer.Chatted:Connect(HandleCommand) end)
 
--- ========== ИНДИКАТОР (видишь ли ты врагов) ==========
+-- ========== ИНДИКАТОР ==========
 local indicator = Instance.new("TextLabel")
-indicator.Size = UDim2.new(0, 200, 0, 30)
-indicator.Position = UDim2.new(0.5, -100, 0, 10)
-indicator.BackgroundTransparency = 1
-indicator.Text = "SWILL: ИЩУ ВРАГОВ..."
+indicator.Size = UDim2.new(0, 250, 0, 35)
+indicator.Position = UDim2.new(0.5, -125, 0, 10)
+indicator.BackgroundTransparency = 0.7
+indicator.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 indicator.TextColor3 = Color3.fromRGB(255, 255, 255)
 indicator.TextSize = 14
 indicator.Font = Enum.Font.GothamBold
+indicator.Text = "SWILL: ЗАГРУЗКА..."
 pcall(function() indicator.Parent = LocalPlayer.PlayerGui end)
 
--- Обновление индикатора
 spawn(function()
-    while wait(0.5) do
+    while wait(0.3) do
         if Settings.Enabled then
             local target = GetClosestEnemy()
             if target then
-                indicator.Text = "SWILL: ЦЕЛЬ - " .. target.Name .. " (FOV: " .. Settings.FOV .. ")"
+                indicator.Text = "🎯 SWILL: " .. target.Name .. " | FOV: " .. Settings.FOV
                 indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
             else
-                indicator.Text = "SWILL: ВРАГОВ НЕТ В FOV (" .. Settings.FOV .. ")"
+                indicator.Text = "❌ SWILL: НЕТ ЦЕЛИ | FOV: " .. Settings.FOV
                 indicator.TextColor3 = Color3.fromRGB(255, 100, 100)
             end
         else
-            indicator.Text = "SWILL: ВЫКЛЮЧЕН (;aim on)"
+            indicator.Text = "⚠️ SWILL: ВЫКЛЮЧЕН (;aim on)"
             indicator.TextColor3 = Color3.fromRGB(255, 255, 0)
         end
     end
 end)
 
 -- ========== ЗАПУСК ==========
-SendChat("=== SWILL TRUE SILENT AIM для XENO + Flick ===")
-SendChat("Мышь НЕ двигается! Пули сами летят в голову.")
+SendChat("=== SWILL TRUE SILENT AIM (XENO + Flick) ===")
+SendChat("Мышь и камера НЕ двигаются вообще!")
+SendChat("Пули математически перехватываются и летят в голову")
 SendChat("Статус: ВКЛЮЧЕН | FOV: " .. Settings.FOV)
 SendChat("Команды: ;aim on/off, ;fov 180")
-SendChat("=============================================")
+SendChat("============================================")
 
 print("=== SWILL TRUE SILENT AIM LOADED ===")
-print("Без дерганья мыши!")
+print("Метод: подмена Raycast - мышь не двигается")
