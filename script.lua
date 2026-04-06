@@ -1,144 +1,181 @@
--- SWILL: COUNTER BLOX - ПРОСТАЯ РАБОЧАЯ ВЕРСИЯ
--- ВСТАВЬ И НАЖМИ EXECUTE
+-- SWILL: XENO РАБОЧАЯ ВЕРСИЯ (без хуков)
+-- Работает через CFrame и RemoteEvent
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
 
--- ========== ВКЛЮЧИТЬ/ВЫКЛЮЧИТЬ ФУНКЦИИ ==========
-local AIMBOT_ENABLED = true   -- Включить аим
-local ESP_ENABLED = true       -- Включить подсветку
-local FOV = 300                -- Зона поиска (300 = почти весь экран)
+-- ========== НАСТРОЙКИ ==========
+local Settings = {
+    Aimbot = true,
+    ESP = true,
+    FOV = 180,
+    AimPart = "Head"
+}
 
--- ========== ПОДСВЕТКА ВРАГОВ (ESP) ==========
+-- ========== ESP (BoxHandleAdornment - работает везде) ==========
 local ESPFolder = Instance.new("Folder")
-ESPFolder.Name = "ESP"
-ESPFolder.Parent = game:GetService("CoreGui")
+ESPFolder.Name = "SWILL_ESP"
+ESPFolder.Parent = workspace
 
-local function AddESP(plr)
-    if plr == LocalPlayer then return end
+local function AddESP(player)
+    if player == LocalPlayer then return end
     
     local box = Instance.new("BoxHandleAdornment")
-    box.Name = plr.Name
-    box.Size = Vector3.new(3, 5, 3)
+    box.Name = player.Name
+    box.Size = Vector3.new(3, 4, 2)
     box.Color3 = Color3.fromRGB(255, 0, 0)
-    box.Transparency = 0.5
-    box.ZIndex = 10
+    box.Transparency = 0.4
+    box.ZIndex = 0
     box.AlwaysOnTop = true
     box.Parent = ESPFolder
     
     local function update()
-        if plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") then
-            box.Adornee = plr.Character.HumanoidRootPart
-            box.Visible = ESP_ENABLED
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            box.Adornee = player.Character.HumanoidRootPart
+            box.Visible = Settings.ESP
         else
             box.Visible = false
         end
     end
     
-    plr.CharacterAdded:Connect(update)
-    plr.CharacterRemoving:Connect(function() box.Visible = false end)
+    player.CharacterAdded:Connect(update)
+    player.CharacterRemoving:Connect(function() box.Visible = false end)
     update()
+    RunService.RenderStepped:Connect(update)
 end
 
-for _, plr in ipairs(Players:GetPlayers()) do AddESP(plr) end
+for _, v in ipairs(Players:GetPlayers()) do AddESP(v) end
 Players.PlayerAdded:Connect(AddESP)
 
--- ========== AIMBOT ==========
-local function GetClosest()
-    local closest = nil
-    local closestDist = FOV
-    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+-- ========== AIMBOT (через CFrame - без движения мыши) ==========
+local function GetClosestEnemy()
+    local closestDist = Settings.FOV
+    local closestPlayer = nil
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr == LocalPlayer then continue end
-        if not plr.Character then continue end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if not player.Character then continue end
         
-        local hum = plr.Character:FindFirstChild("Humanoid")
+        local hum = player.Character:FindFirstChild("Humanoid")
         if not hum or hum.Health <= 0 then continue end
         
-        local head = plr.Character:FindFirstChild("Head")
-        if not head then continue end
+        local targetPart = player.Character:FindFirstChild(Settings.AimPart) or player.Character:FindFirstChild("Head")
+        if not targetPart then continue end
         
-        local pos, on = Camera:WorldToViewportPoint(head.Position)
-        if not on then continue end
+        local screenPos, onScreen = Camera:WorldToViewportPoint(targetPart.Position)
+        if not onScreen then continue end
         
-        local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+        local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
         if dist < closestDist then
             closestDist = dist
-            closest = plr
+            closestPlayer = player
         end
     end
-    return closest
+    return closestPlayer
 end
 
--- Аим при выстреле
-local oldClick = Mouse.Button1Down
-Mouse.Button1Down = function()
-    if AIMBOT_ENABLED then
-        local target = GetClosest()
+-- Аим при выстреле (поворот камеры)
+UserInputService.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and Settings.Aimbot then
+        local target = GetClosestEnemy()
         if target and target.Character then
-            local head = target.Character:FindFirstChild("Head")
-            if head then
-                local oldX, oldY = Mouse.X, Mouse.Y
-                local pos = Camera:WorldToViewportPoint(head.Position)
-                mousemoveabs(pos.X, pos.Y)
-                oldClick()
-                mousemoveabs(oldX, oldY)
-                return
+            local aimPart = target.Character:FindFirstChild(Settings.AimPart) or target.Character:FindFirstChild("Head")
+            if aimPart then
+                -- Сохраняем старую позицию камеры
+                local oldCF = Camera.CFrame
+                -- Поворачиваем камеру на цель
+                Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPart.Position)
+                -- Ждём 1 кадр
+                task.wait()
+                -- Возвращаем камеру
+                Camera.CFrame = oldCF
             end
         end
     end
-    oldClick()
+end)
+
+-- ========== УПРОЩЁННОЕ МЕНЮ ==========
+local ScreenGui = Instance.new("ScreenGui")
+pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+if not ScreenGui.Parent then
+    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 end
 
--- ========== ЧАТ КОМАНДЫ ==========
-LocalPlayer.Chatted:Connect(function(msg)
-    if msg == ".aim on" then
-        AIMBOT_ENABLED = true
-        print("[SWILL] Aimbot ON")
-    elseif msg == ".aim off" then
-        AIMBOT_ENABLED = false
-        print("[SWILL] Aimbot OFF")
-    elseif msg == ".esp on" then
-        ESP_ENABLED = true
-        print("[SWILL] ESP ON")
-    elseif msg == ".esp off" then
-        ESP_ENABLED = false
-        print("[SWILL] ESP OFF")
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0, 250, 0, 120)
+MainFrame.Position = UDim2.new(0.5, -125, 0.5, -60)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.Visible = false
+MainFrame.Parent = ScreenGui
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 30)
+Title.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+Title.Text = "SWILL CONTROLS"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 14
+Title.Parent = MainFrame
+
+local AimBtn = Instance.new("TextButton")
+AimBtn.Size = UDim2.new(0, 100, 0, 30)
+AimBtn.Position = UDim2.new(0.5, -110, 0, 40)
+AimBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+AimBtn.Text = "AIM: ON"
+AimBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AimBtn.Parent = MainFrame
+
+local ESPBtn = Instance.new("TextButton")
+ESPBtn.Size = UDim2.new(0, 100, 0, 30)
+ESPBtn.Position = UDim2.new(0.5, 10, 0, 40)
+ESPBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 65)
+ESPBtn.Text = "ESP: ON"
+ESPBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ESPBtn.Parent = MainFrame
+
+AimBtn.MouseButton1Click:Connect(function()
+    Settings.Aimbot = not Settings.Aimbot
+    AimBtn.Text = "AIM: " .. (Settings.Aimbot and "ON" or "OFF")
+    AimBtn.BackgroundColor3 = Settings.Aimbot and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(50, 50, 65)
+end)
+
+ESPBtn.MouseButton1Click:Connect(function()
+    Settings.ESP = not Settings.ESP
+    ESPBtn.Text = "ESP: " .. (Settings.ESP and "ON" or "OFF")
+    ESPBtn.BackgroundColor3 = Settings.ESP and Color3.fromRGB(255, 60, 60) or Color3.fromRGB(50, 50, 65)
+end)
+
+UserInputService.InputBegan:Connect(function(input)
+    if input.KeyCode == Enum.KeyCode.Insert then
+        MainFrame.Visible = not MainFrame.Visible
     end
 end)
 
 -- ========== ИНДИКАТОР ==========
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Parent = game:GetService("CoreGui")
-
-local Text = Instance.new("TextLabel")
-Text.Size = UDim2.new(0, 200, 0, 30)
-Text.Position = UDim2.new(0.5, -100, 0, 10)
-Text.BackgroundTransparency = 1
-Text.Text = "SWILL | AIM: ON | ESP: ON"
-Text.TextColor3 = Color3.fromRGB(0, 255, 0)
-Text.TextSize = 14
-Text.Font = Enum.Font.GothamBold
-Text.Parent = ScreenGui
+local Indicator = Instance.new("TextLabel")
+Indicator.Size = UDim2.new(0, 250, 0, 25)
+Indicator.Position = UDim2.new(0.5, -125, 0, 5)
+Indicator.BackgroundTransparency = 0.7
+Indicator.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+Indicator.Text = "SWILL: AIM ON | ESP ON"
+Indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
+Indicator.TextSize = 12
+Indicator.Parent = ScreenGui
 
 spawn(function()
-    while wait(1) do
-        Text.Text = "SWILL | AIM: " .. (AIMBOT_ENABLED and "ON" or "OFF") .. " | ESP: " .. (ESP_ENABLED and "ON" or "OFF")
-        Text.TextColor3 = AIMBOT_ENABLED and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+    while true do
+        wait(0.5)
+        Indicator.Text = "SWILL: AIM " .. (Settings.Aimbot and "ON" or "OFF") .. " | ESP " .. (Settings.ESP and "ON" or "OFF")
+        Indicator.TextColor3 = Settings.Aimbot and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
     end
 end)
 
-print("======================================")
-print("SWILL загружен для Counter Blox!")
-print("Aimbot: просто стреляй - попадает в голову")
-print("ESP: красные кубы вокруг врагов")
-print("Чат команды:")
-print("  .aim on  - включить аим")
-print("  .aim off - выключить аим")
-print("  .esp on  - включить подсветку")
-print("  .esp off - выключить подсветку")
-print("======================================")
+-- ========== УВЕДОМЛЕНИЕ ==========
+print("=== SWILL LOADED ===")
+print("INSERT - открыть меню")
+print("Aimbot работает при стрельбе (поворот камеры)")
+print("ESP - красные кубы вокруг врагов")
