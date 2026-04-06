@@ -1,10 +1,9 @@
--- SWILL: XENO + FLICK (ПОЛНОСТЬЮ РАБОЧАЯ ВЕРСИЯ)
+-- SWILL: COUNTER BLOX (RBX) - AIMBOT + BOXESP
 -- МЕНЮ: INSERT | АИМ: ПРАВАЯ КНОПКА МЫШИ
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
@@ -14,32 +13,26 @@ local Settings = {
     MenuOpen = false,
     Aimbot = true,
     Smoothness = 0.3,
-    FOV = 200,
+    FOV = 150,
     TeamCheck = true,
     AimPart = "Head",
-    Wallhack = true,
-    ShowESP = true
+    BoxESP = true,
+    NameESP = true,
+    HealthBar = true,
+    SkeletonESP = false
 }
 
 -- ========== GUI МЕНЮ ==========
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SWILL_Menu"
+ScreenGui.Name = "SWILL_CounterBlox"
 ScreenGui.ResetOnSpawn = false
-ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Пытаемся создать GUI
-local success, err = pcall(function()
-    ScreenGui.Parent = game:GetService("CoreGui")
-end)
-if not success then
-    pcall(function()
-        ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-    end)
+pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+if not ScreenGui.Parent then
+    pcall(function() ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui") end)
 end
 
--- Главное окно
 local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
 MainFrame.Size = UDim2.new(0, 400, 0, 450)
 MainFrame.Position = UDim2.new(0.5, -200, 0.5, -225)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
@@ -52,7 +45,6 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 10)
 MainCorner.Parent = MainFrame
 
--- Заголовок
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 45)
 TitleBar.BackgroundColor3 = Color3.fromRGB(255, 70, 70)
@@ -67,7 +59,7 @@ local TitleText = Instance.new("TextLabel")
 TitleText.Size = UDim2.new(1, -50, 1, 0)
 TitleText.Position = UDim2.new(0, 15, 0, 0)
 TitleText.BackgroundTransparency = 1
-TitleText.Text = "SWILL HUB | XENO + FLICK"
+TitleText.Text = "SWILL | COUNTER BLOX"
 TitleText.TextColor3 = Color3.fromRGB(255, 255, 255)
 TitleText.TextSize = 18
 TitleText.Font = Enum.Font.GothamBold
@@ -88,16 +80,14 @@ CloseBtn.MouseButton1Click:Connect(function()
     MainFrame.Visible = false
 end)
 
--- Контент
 local ContentFrame = Instance.new("ScrollingFrame")
 ContentFrame.Size = UDim2.new(1, -20, 1, -60)
 ContentFrame.Position = UDim2.new(0, 10, 0, 55)
 ContentFrame.BackgroundTransparency = 1
-ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 400)
+ContentFrame.CanvasSize = UDim2.new(0, 0, 0, 500)
 ContentFrame.ScrollBarThickness = 5
 ContentFrame.Parent = MainFrame
 
--- Функция создания чекбокса
 local function CreateCheckbox(parent, text, yPos, settingName)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -20, 0, 35)
@@ -134,7 +124,6 @@ local function CreateCheckbox(parent, text, yPos, settingName)
     return frame
 end
 
--- Функция создания слайдера
 local function CreateSlider(parent, text, yPos, minVal, maxVal, settingName, isInt)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -20, 0, 60)
@@ -195,93 +184,120 @@ local function CreateSlider(parent, text, yPos, minVal, maxVal, settingName, isI
     return frame
 end
 
--- Создаем элементы меню
-local yOffset = 5
-CreateCheckbox(ContentFrame, "Aimbot (ПКМ)", yOffset, "Aimbot")
-yOffset = yOffset + 40
-CreateSlider(ContentFrame, "FOV (градусы)", yOffset, 10, 360, "FOV", true)
-yOffset = yOffset + 65
-CreateSlider(ContentFrame, "Плавность наведения", yOffset, 0, 1, "Smoothness", false)
-yOffset = yOffset + 65
-CreateCheckbox(ContentFrame, "Wallhack (подсветка)", yOffset, "Wallhack")
-yOffset = yOffset + 40
-CreateCheckbox(ContentFrame, "ESP (имя/здоровье)", yOffset, "ShowESP")
-yOffset = yOffset + 40
-CreateCheckbox(ContentFrame, "Team Check", yOffset, "TeamCheck")
+local y = 5
+CreateCheckbox(ContentFrame, "Aimbot (ПКМ)", y, "Aimbot")
+y = y + 40
+CreateSlider(ContentFrame, "FOV (градусы)", y, 10, 360, "FOV", true)
+y = y + 65
+CreateSlider(ContentFrame, "Плавность", y, 0, 1, "Smoothness", false)
+y = y + 65
+CreateCheckbox(ContentFrame, "Box ESP", y, "BoxESP")
+y = y + 40
+CreateCheckbox(ContentFrame, "Name + Health", y, "NameESP")
+y = y + 40
+CreateCheckbox(ContentFrame, "Health Bar", y, "HealthBar")
+y = y + 40
+CreateCheckbox(ContentFrame, "Team Check", y, "TeamCheck")
+ContentFrame.CanvasSize = UDim2.new(0, 0, 0, y + 50)
 
--- Обновляем размер Canvas
-ContentFrame.CanvasSize = UDim2.new(0, 0, 0, yOffset + 50)
-
--- ========== WALLHACK + ESP ==========
+-- ========== BOX ESP ДЛЯ COUNTER BLOX ==========
 local ESPFolder = Instance.new("Folder")
-ESPFolder.Name = "SWILL_ESP"
+ESPFolder.Name = "SWILL_CB_ESP"
 pcall(function() ESPFolder.Parent = game:GetService("CoreGui") end)
 if not ESPFolder.Parent then
     pcall(function() ESPFolder.Parent = LocalPlayer:WaitForChild("PlayerGui") end)
 end
 
-local function CreateESP(player)
+local function CreateBoxESP(player)
     if player == LocalPlayer then return end
     
-    -- Подсветка через стены
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "HL_" .. player.Name
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0.2
-    highlight.FillColor = Color3.fromRGB(255, 50, 50)
-    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-    highlight.Parent = ESPFolder
-    
-    -- Billboard для имени и здоровья
     local billboard = Instance.new("BillboardGui")
-    billboard.Name = "BB_" .. player.Name
-    billboard.Size = UDim2.new(0, 120, 0, 35)
-    billboard.StudsOffset = Vector3.new(0, 2.2, 0)
+    billboard.Name = "ESP_" .. player.Name
+    billboard.Size = UDim2.new(0, 200, 0, 150)
+    billboard.StudsOffset = Vector3.new(0, 1, 0)
     billboard.AlwaysOnTop = true
+    billboard.Enabled = true
     billboard.Parent = ESPFolder
     
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    textLabel.TextStrokeTransparency = 0.2
-    textLabel.TextSize = 12
-    textLabel.Font = Enum.Font.GothamBold
-    textLabel.Parent = billboard
+    local boxFrame = Instance.new("Frame")
+    boxFrame.Name = "Box"
+    boxFrame.Size = UDim2.new(0, 80, 0, 100)
+    boxFrame.Position = UDim2.new(0.5, -40, 0.5, -50)
+    boxFrame.BackgroundTransparency = 1
+    boxFrame.BorderSizePixel = 2
+    boxFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+    boxFrame.Parent = billboard
+    
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "Name"
+    nameLabel.Size = UDim2.new(1, 0, 0, 20)
+    nameLabel.Position = UDim2.new(0, 0, 0, -20)
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.Text = player.Name
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextSize = 12
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextStrokeTransparency = 0.3
+    nameLabel.Parent = billboard
+    
+    local healthBar = Instance.new("Frame")
+    healthBar.Name = "Health"
+    healthBar.Size = UDim2.new(0, 80, 0, 6)
+    healthBar.Position = UDim2.new(0.5, -40, 1, 5)
+    healthBar.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+    healthBar.BorderSizePixel = 0
+    healthBar.Parent = billboard
+    
+    local healthBg = Instance.new("Frame")
+    healthBg.Size = UDim2.new(1, 0, 1, 0)
+    healthBg.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    healthBg.BorderSizePixel = 0
+    healthBg.Parent = healthBar
     
     local function UpdateESP()
         if not player.Character then
-            highlight.Adornee = nil
             billboard.Adornee = nil
             return
         end
         
-        highlight.Adornee = player.Character
         billboard.Adornee = player.Character
-        highlight.Enabled = Settings.Wallhack
-        billboard.Enabled = Settings.ShowESP
+        billboard.Enabled = Settings.BoxESP or Settings.NameESP or Settings.HealthBar
         
         local humanoid = player.Character:FindFirstChild("Humanoid")
         if humanoid then
             local hp = math.floor(humanoid.Health)
-            local color = Color3.fromRGB(255 - (hp * 2.55), hp * 2.55, 0)
-            textLabel.Text = player.Name .. " | " .. hp .. " HP"
-            textLabel.TextColor3 = color
+            local maxHp = humanoid.MaxHealth or 100
+            local hpPercent = math.clamp(hp / maxHp, 0, 1)
+            
+            -- Цвет рамки в зависимости от здоровья
+            local boxColor = Color3.fromRGB(255 - (hp * 2.55), hp * 2.55, 0)
+            boxFrame.BorderColor3 = boxColor
+            
+            -- Полоска здоровья
+            healthBar.Size = UDim2.new(hpPercent, 0, 0, 6)
+            healthBar.BackgroundColor3 = boxColor
+            
+            -- Имя с здоровьем
+            nameLabel.Text = player.Name .. " [" .. hp .. " HP]"
+            nameLabel.TextColor3 = boxColor
+            
+            -- Видимость элементов
+            boxFrame.Visible = Settings.BoxESP
+            nameLabel.Visible = Settings.NameESP
+            healthBar.Visible = Settings.HealthBar
         end
     end
     
     player.CharacterAdded:Connect(UpdateESP)
     player.CharacterRemoving:Connect(UpdateESP)
     UpdateESP()
-    
-    -- Постоянное обновление
     RunService.Heartbeat:Connect(UpdateESP)
 end
 
-for _, plr in ipairs(Players:GetPlayers()) do CreateESP(plr) end
-Players.PlayerAdded:Connect(CreateESP)
+for _, plr in ipairs(Players:GetPlayers()) do CreateBoxESP(plr) end
+Players.PlayerAdded:Connect(CreateBoxESP)
 
--- ========== AIMBOT (ПРАВАЯ КНОПКА) ==========
+-- ========== AIMBOT ДЛЯ COUNTER BLOX (НАВЕДЕНИЕ МЫШКОЙ) ==========
 local function GetClosestTarget()
     local closestDist = Settings.FOV
     local closestTarget = nil
@@ -311,7 +327,7 @@ local function GetClosestTarget()
     return closestTarget
 end
 
--- Функция плавного наведения
+-- Функция плавного наведения мыши
 local function SmoothAim(target)
     if not target or not target.Character then return end
     
@@ -323,7 +339,7 @@ local function SmoothAim(target)
     local currentPos = Vector2.new(Mouse.X, Mouse.Y)
     local delta = (targetPos - currentPos) * (1 - Settings.Smoothness)
     
-    -- Двигаем мышь
+    -- Движение мыши для XENO
     pcall(function()
         mousemoverel(delta.X, delta.Y)
     end)
@@ -333,17 +349,6 @@ end
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.MouseButton2 and Settings.Aimbot then
-        local target = GetClosestTarget()
-        if target then
-            SmoothAim(target)
-        end
-    end
-end)
-
--- Также при зажатой левой (опционально)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and Settings.Aimbot then
         local target = GetClosestTarget()
         if target then
             SmoothAim(target)
@@ -382,11 +387,40 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
+-- ========== ИНДИКАТОР ==========
+local indicator = Instance.new("TextLabel")
+indicator.Size = UDim2.new(0, 300, 0, 35)
+indicator.Position = UDim2.new(0.5, -150, 0, 10)
+indicator.BackgroundTransparency = 0.7
+indicator.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+indicator.TextColor3 = Color3.fromRGB(255, 255, 255)
+indicator.TextSize = 14
+indicator.Font = Enum.Font.GothamBold
+pcall(function() indicator.Parent = LocalPlayer.PlayerGui end)
+
+spawn(function()
+    while wait(0.3) do
+        if Settings.Aimbot then
+            local target = GetClosestTarget()
+            if target then
+                indicator.Text = "🎯 AIM: " .. target.Name .. " | FOV: " .. Settings.FOV
+                indicator.TextColor3 = Color3.fromRGB(0, 255, 0)
+            else
+                indicator.Text = "❌ НЕТ ЦЕЛИ | FOV: " .. Settings.FOV
+                indicator.TextColor3 = Color3.fromRGB(255, 100, 100)
+            end
+        else
+            indicator.Text = "⚠️ AIMBOT ВЫКЛЮЧЕН"
+            indicator.TextColor3 = Color3.fromRGB(255, 255, 0)
+        end
+    end
+end)
+
 -- ========== УВЕДОМЛЕНИЕ ==========
 local function Notify(msg)
     pcall(function()
         game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "SWILL HUB",
+            Title = "SWILL | COUNTER BLOX",
             Text = msg,
             Duration = 3
         })
@@ -396,3 +430,4 @@ end
 
 Notify("Загружен! Нажми INSERT для меню")
 Notify("Aimbot: ПРАВАЯ кнопка мыши")
+Notify("Box ESP активен")
