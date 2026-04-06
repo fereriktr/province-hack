@@ -1,157 +1,80 @@
--- SWILL: XENO РАБОЧАЯ ВЕРСИЯ
--- Работает: ESP, Aimbot, BunnyHop
--- Управление: Чат команды
+-- SWILL: ПРОСТЕЙШАЯ ВЕРСИЯ (РАБОТАЕТ 100%)
+-- Всё управление через чат команды
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 local Mouse = LocalPlayer:GetMouse()
 
 -- ========== НАСТРОЙКИ ==========
-local Settings = {
-    Aimbot = true,
-    ESP = true,
-    BunnyHop = true,
-    FOV = 250
-}
+local Aimbot = true
+local ESP = true
+local BunnyHop = true
 
--- ========== ESP (BOX HANDLE ADORNMENT - РАБОТАЕТ В XENO) ==========
-local ESPFolder = Instance.new("Folder")
-ESPFolder.Name = "SWILL_ESP"
-ESPFolder.Parent = workspace
-
-local function CreateESP(player)
-    if player == LocalPlayer then return end
-    
-    local box = Instance.new("BoxHandleAdornment")
-    box.Name = player.Name
-    box.Size = Vector3.new(3, 4, 2)
-    box.Color3 = Color3.fromRGB(255, 0, 0)
-    box.Transparency = 0.4
-    box.AlwaysOnTop = true
-    box.ZIndex = 0
-    box.Parent = ESPFolder
-    
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "Name_" .. player.Name
-    billboard.Size = UDim2.new(0, 100, 0, 25)
-    billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = ESPFolder
-    
-    local text = Instance.new("TextLabel")
-    text.Size = UDim2.new(1, 0, 1, 0)
-    text.BackgroundTransparency = 1
-    text.TextColor3 = Color3.fromRGB(255, 255, 255)
-    text.TextSize = 12
-    text.Font = Enum.Font.GothamBold
-    text.TextStrokeTransparency = 0.3
-    text.Parent = billboard
-    
-    local function update()
-        if not Settings.ESP then
-            box.Visible = false
-            billboard.Enabled = false
-            return
-        end
-        
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            box.Adornee = player.Character.HumanoidRootPart
-            billboard.Adornee = player.Character
-            box.Visible = true
-            billboard.Enabled = true
-            
-            local hum = player.Character:FindFirstChild("Humanoid")
-            if hum then
-                local hp = math.floor(hum.Health)
-                local r = 255 - (hp * 2.55)
-                local g = hp * 2.55
-                box.Color3 = Color3.fromRGB(r, g, 0)
-                text.Text = player.Name .. " [" .. hp .. " HP]"
-                text.TextColor3 = Color3.fromRGB(r, g, 0)
+-- ========== ESP (ПРОСТАЯ ПОДСВЕТКА) ==========
+local function UpdateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local highlight = player.Character:FindFirstChild("SWILL_Highlight")
+            if not highlight and ESP then
+                highlight = Instance.new("Highlight")
+                highlight.Name = "SWILL_Highlight"
+                highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                highlight.FillTransparency = 0.5
+                highlight.Parent = player.Character
+            elseif highlight and not ESP then
+                highlight:Destroy()
             end
-        else
-            box.Visible = false
-            billboard.Enabled = false
         end
     end
-    
-    player.CharacterAdded:Connect(update)
-    player.CharacterRemoving:Connect(function()
-        box.Visible = false
-        billboard.Enabled = false
-    end)
-    update()
-    RunService.RenderStepped:Connect(update)
 end
-
-for _, v in ipairs(Players:GetPlayers()) do CreateESP(v) end
-Players.PlayerAdded:Connect(CreateESP)
 
 -- ========== AIMBOT ==========
-local function GetClosestEnemy()
-    local closestDist = Settings.FOV
-    local closestPlayer = nil
-    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+local function GetTarget()
+    local closest = nil
+    local closestDist = 300
+    local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     
     for _, player in ipairs(Players:GetPlayers()) do
-        if player == LocalPlayer then continue end
-        if not player.Character then continue end
-        
-        local hum = player.Character:FindFirstChild("Humanoid")
-        if not hum or hum.Health <= 0 then continue end
-        
-        local head = player.Character:FindFirstChild("Head")
-        if not head then continue end
-        
-        local screenPos, onScreen = Camera:WorldToViewportPoint(head.Position)
-        if not onScreen then continue end
-        
-        local dist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
-        if dist < closestDist then
-            closestDist = dist
-            closestPlayer = player
+        if player ~= LocalPlayer and player.Character then
+            local head = player.Character:FindFirstChild("Head")
+            if head then
+                local pos, on = Camera:WorldToViewportPoint(head.Position)
+                if on then
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist < closestDist then
+                        closestDist = dist
+                        closest = player
+                    end
+                end
+            end
         end
     end
-    return closestPlayer
+    return closest
 end
 
--- Аим при нажатии левой кнопки
 UserInputService.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and Settings.Aimbot then
-        local target = GetClosestEnemy()
-        if target and target.Character then
-            local head = target.Character:FindFirstChild("Head")
-            if head then
-                local oldPos = Vector2.new(Mouse.X, Mouse.Y)
-                local targetPos = Camera:WorldToViewportPoint(head.Position)
-                
-                -- Двигаем мышь к цели
-                pcall(function()
-                    mousemoveabs(targetPos.X, targetPos.Y)
-                end)
-                
-                -- Небольшая задержка для выстрела
-                task.wait(0.01)
-                
-                -- Возвращаем мышь (опционально)
-                pcall(function()
-                    mousemoveabs(oldPos.X, oldPos.Y)
-                end)
-            end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and Aimbot then
+        local target = GetTarget()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            local head = target.Character.Head
+            local oldPos = Vector2.new(Mouse.X, Mouse.Y)
+            local newPos = Camera:WorldToViewportPoint(head.Position)
+            pcall(function() mousemoveabs(newPos.X, newPos.Y) end)
+            task.wait()
+            pcall(function() mousemoveabs(oldPos.X, oldPos.Y) end)
         end
     end
 end)
 
 -- ========== BUNNY HOP ==========
-local spacePressed = false
-
+local jumping = false
 UserInputService.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.Space and Settings.BunnyHop then
-        spacePressed = true
-        while spacePressed and Settings.BunnyHop do
+    if input.KeyCode == Enum.KeyCode.Space and BunnyHop then
+        jumping = true
+        while jumping and BunnyHop do
             local char = LocalPlayer.Character
             if char then
                 local hum = char:FindFirstChild("Humanoid")
@@ -166,92 +89,70 @@ end)
 
 UserInputService.InputEnded:Connect(function(input)
     if input.KeyCode == Enum.KeyCode.Space then
-        spacePressed = false
+        jumping = false
     end
 end)
 
 -- ========== ЧАТ КОМАНДЫ ==========
 LocalPlayer.Chatted:Connect(function(msg)
     if msg == ".aim on" then
-        Settings.Aimbot = true
-        print("[SWILL] Aimbot ON")
+        Aimbot = true
+        print("[SWILL] AIM ON")
     elseif msg == ".aim off" then
-        Settings.Aimbot = false
-        print("[SWILL] Aimbot OFF")
+        Aimbot = false
+        print("[SWILL] AIM OFF")
     elseif msg == ".esp on" then
-        Settings.ESP = true
+        ESP = true
+        UpdateESP()
         print("[SWILL] ESP ON")
     elseif msg == ".esp off" then
-        Settings.ESP = false
+        ESP = false
+        UpdateESP()
         print("[SWILL] ESP OFF")
     elseif msg == ".bhop on" then
-        Settings.BunnyHop = true
-        print("[SWILL] BunnyHop ON")
+        BunnyHop = true
+        print("[SWILL] BHOP ON")
     elseif msg == ".bhop off" then
-        Settings.BunnyHop = false
-        print("[SWILL] BunnyHop OFF")
-    elseif msg == ".fov 100" then
-        Settings.FOV = 100
-        print("[SWILL] FOV = 100")
-    elseif msg == ".fov 200" then
-        Settings.FOV = 200
-        print("[SWILL] FOV = 200")
-    elseif msg == ".fov 300" then
-        Settings.FOV = 300
-        print("[SWILL] FOV = 300")
+        BunnyHop = false
+        print("[SWILL] BHOP OFF")
     end
 end)
 
+-- ========== ОБНОВЛЕНИЕ ESP ==========
+RunService.RenderStepped:Connect(UpdateESP)
+
 -- ========== ИНДИКАТОР ==========
-local ScreenGui = Instance.new("ScreenGui")
-pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
-if not ScreenGui.Parent then
-    ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
-end
+local gui = Instance.new("ScreenGui")
+gui.Name = "SWILL_Indicator"
+gui.Parent = game:GetService("CoreGui")
 
-local Indicator = Instance.new("Frame")
-Indicator.Size = UDim2.new(0, 220, 0, 30)
-Indicator.Position = UDim2.new(0.5, -110, 0, 10)
-Indicator.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-Indicator.BackgroundTransparency = 0.5
-Indicator.BorderSizePixel = 1
-Indicator.BorderColor3 = Color3.fromRGB(255, 60, 60)
-Indicator.Parent = ScreenGui
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 30)
+frame.Position = UDim2.new(0.5, -100, 0, 5)
+frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+frame.BackgroundTransparency = 0.5
+frame.Parent = gui
 
-local IndicatorText = Instance.new("TextLabel")
-IndicatorText.Size = UDim2.new(1, 0, 1, 0)
-IndicatorText.BackgroundTransparency = 1
-IndicatorText.Text = "SWILL: AIM ON | ESP ON | BHOP ON"
-IndicatorText.TextColor3 = Color3.fromRGB(0, 255, 0)
-IndicatorText.TextSize = 12
-IndicatorText.Font = Enum.Font.GothamBold
-IndicatorText.Parent = Indicator
+local text = Instance.new("TextLabel")
+text.Size = UDim2.new(1, 0, 1, 0)
+text.BackgroundTransparency = 1
+text.Text = "SWILL: AIM ON | ESP ON | BHOP ON"
+text.TextColor3 = Color3.fromRGB(0, 255, 0)
+text.TextSize = 12
+text.Parent = frame
 
 spawn(function()
     while true do
-        wait(0.3)
-        local aimStatus = Settings.Aimbot and "ON" or "OFF"
-        local espStatus = Settings.ESP and "ON" or "OFF"
-        local bhopStatus = Settings.BunnyHop and "ON" or "OFF"
-        IndicatorText.Text = "SWILL: AIM " .. aimStatus .. " | ESP " .. espStatus .. " | BHOP " .. bhopStatus
-        IndicatorText.TextColor3 = (Settings.Aimbot or Settings.ESP or Settings.BunnyHop) and Color3.fromRGB(0, 255, 0) or Color3.fromRGB(255, 0, 0)
+        wait(0.5)
+        text.Text = "SWILL: AIM " .. (Aimbot and "ON" or "OFF") .. " | ESP " .. (ESP and "ON" or "OFF") .. " | BHOP " .. (BunnyHop and "ON" or "OFF")
     end
 end)
 
--- ========== УВЕДОМЛЕНИЕ ==========
+-- ========== СТАРТ ==========
 print("========================================")
-print("SWILL ЗАГРУЖЕН ДЛЯ XENO!")
-print("Чат команды:")
-print("  .aim on/off  - AIMBOT")
-print("  .esp on/off  - ESP")
-print("  .bhop on/off - BUNNYHOP")
-print("  .fov 100/200/300 - ДАЛЬНОСТЬ AIM")
+print("SWILL ЗАГРУЖЕН!")
+print("КОМАНДЫ В ЧАТ (напиши .aim on)")
+print(".aim on/off - Аимбот")
+print(".esp on/off - Подсветка врагов")
+print(".bhop on/off - Автопрыжок")
 print("========================================")
-
-pcall(function()
-    game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "SWILL",
-        Text = "Загружен! Команды в чат: .aim on",
-        Duration = 4
-    })
-end)
