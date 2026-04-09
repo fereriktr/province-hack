@@ -1,52 +1,92 @@
--- SWILL: ПРОСТОЙ WALLHACK (ПОДСВЕТКА ВРАГОВ)
--- Работает в любой игре Roblox
+-- SWILL: WALLHACK БЕЗ ДЕТЕКТА (НЕ ТРОГАЕТ ИГРОВЫЕ СКРИПТЫ)
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
--- Создаём папку для подсветки
-local ESPFolder = Instance.new("Folder")
-ESPFolder.Name = "SWILL_Wallhack"
-ESPFolder.Parent = workspace
+-- ========== WALLHACK ЧЕРЕЗ ESP (НЕ ТРОГАЕТ ПЕРСОНАЖЕЙ) ==========
+local ESPObjects = {}
 
--- Функция добавления подсветки игроку
-local function AddHighlight(player)
+local function CreateWallhack(player)
     if player == LocalPlayer then return end
     
-    -- Ждём появления персонажа
-    local function onCharacterAdded(character)
-        -- Удаляем старую подсветку если есть
-        local oldHighlight = character:FindFirstChild("WallhackHighlight")
-        if oldHighlight then oldHighlight:Destroy() end
+    -- Используем Drawing (рисуем на экране, не трогаем игру)
+    local box = Drawing.new("Square")
+    box.Visible = false
+    box.Thickness = 2
+    box.Color = 0xFF0000FF
+    box.Filled = false
+    
+    local name = Drawing.new("Text")
+    name.Visible = false
+    name.Size = 14
+    name.Center = true
+    name.Color = 0xFFFFFFFF
+    
+    ESPObjects[player] = {box = box, name = name}
+    
+    -- Обновление позиции
+    local function update()
+        if not player.Character then
+            box.Visible = false
+            name.Visible = false
+            return
+        end
         
-        -- Создаём новую подсветку
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "WallhackHighlight"
-        highlight.FillColor = Color3.fromRGB(255, 0, 0)  -- Красный цвет
-        highlight.FillTransparency = 0.5                 -- Полупрозрачный
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255) -- Белый контур
-        highlight.OutlineTransparency = 0.3
-        highlight.Parent = character
+        local root = player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Head")
+        if not root then
+            box.Visible = false
+            name.Visible = false
+            return
+        end
+        
+        local pos, onScreen = Camera:WorldToViewportPoint(root.Position)
+        if not onScreen then
+            box.Visible = false
+            name.Visible = false
+            return
+        end
+        
+        -- Размер рамки от расстояния
+        local dist = (Camera.CFrame.Position - root.Position).Magnitude
+        local size = math.clamp(3000 / dist, 40, 120)
+        
+        box.Size = Vector2.new(size * 0.7, size)
+        box.Position = Vector2.new(pos.X - (size * 0.35), pos.Y - size / 2)
+        box.Visible = true
+        
+        name.Text = player.Name
+        name.Position = Vector2.new(pos.X, pos.Y - size / 2 - 10)
+        name.Visible = true
     end
     
-    -- Если персонаж уже есть
-    if player.Character then
-        onCharacterAdded(player.Character)
-    end
-    
-    -- Следим за появлением персонажа
-    player.CharacterAdded:Connect(onCharacterAdded)
+    player.CharacterAdded:Connect(update)
+    player.CharacterRemoving:Connect(function()
+        box.Visible = false
+        name.Visible = false
+    end)
+    RunService.RenderStepped:Connect(update)
+    update()
 end
 
--- Добавляем подсветку всем игрокам
+-- Запускаем для всех игроков
 for _, player in ipairs(Players:GetPlayers()) do
-    AddHighlight(player)
+    CreateWallhack(player)
 end
 
--- Добавляем подсветку новым игрокам
-Players.PlayerAdded:Connect(AddHighlight)
+Players.PlayerAdded:Connect(CreateWallhack)
+
+-- Чистка при удалении игрока
+Players.PlayerRemoving:Connect(function(player)
+    if ESPObjects[player] then
+        ESPObjects[player].box:Remove()
+        ESPObjects[player].name:Remove()
+        ESPObjects[player] = nil
+    end
+end)
 
 print("========================================")
-print("SWILL: WallHack включён!")
-print("Все враги подсвечены красным через стены")
+print("SWILL: WallHack загружен (без детекта)")
+print("Красные рамки вокруг врагов")
 print("========================================")
