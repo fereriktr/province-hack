@@ -1,47 +1,35 @@
--- SWILL: BEAM GLOW ESP (ЛУЧЕВОЕ СВЕЧЕНИЕ)
+-- SWILL: GLOW ОБВОДКА ПЕРСОНАЖА (ПО КОНТУРУ)
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
-local Beams = {}
-
-local function AddBeamGlow(player)
+local function AddGlowOutline(player)
     if player == LocalPlayer then return end
     
-    local function createBeam(character)
-        local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
-        if not root then return end
-        
-        local beam = Instance.new("Beam")
-        beam.Name = "GlowBeam"
-        beam.Width0 = 2
-        beam.Width1 = 2
-        beam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
-        beam.Transparency = NumberSequence.new(0.5)
-        beam.Parent = root
-        
-        -- Луч от игрока вверх
-        local attachment0 = Instance.new("Attachment")
-        attachment0.Parent = root
-        attachment0.Position = Vector3.new(0, 0, 0)
-        
-        local attachment1 = Instance.new("Attachment")
-        attachment1.Parent = root
-        attachment1.Position = Vector3.new(0, 5, 0)
-        
-        beam.Attachment0 = attachment0
-        beam.Attachment1 = attachment1
-        
-        Beams[player] = beam
-    end
-    
     local function onCharacterAdded(character)
-        local old = character:FindFirstChild("GlowBeam")
-        if old then old:Destroy() end
-        task.wait(0.1)
-        createBeam(character)
+        -- Удаляем старую обводку
+        local oldGlow = character:FindFirstChild("GlowOutline")
+        if oldGlow then oldGlow:Destroy() end
+        
+        -- Создаём свечение через Highlight
+        local glow = Instance.new("Highlight")
+        glow.Name = "GlowOutline"
+        glow.FillTransparency = 1  -- Полностью прозрачная заливка (не видна)
+        glow.OutlineTransparency = 0  -- Непрозрачный контур
+        glow.OutlineColor = Color3.fromRGB(255, 0, 0)  -- Красный контур
+        glow.FillColor = Color3.fromRGB(255, 0, 0)
+        glow.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop  -- Видно через стены
+        glow.Parent = character
+        
+        -- Обновляем цвет контура от здоровья
+        local hum = character:WaitForChild("Humanoid")
+        hum.HealthChanged:Connect(function()
+            local hp = hum.Health
+            local r = 255
+            local g = math.min(255, hp * 2.55)
+            local b = math.min(255, hp * 2.55)
+            glow.OutlineColor = Color3.fromRGB(r, g, b)
+        end)
     end
     
     if player.Character then
@@ -51,10 +39,14 @@ local function AddBeamGlow(player)
     player.CharacterAdded:Connect(onCharacterAdded)
 end
 
+-- Добавляем обводку всем игрокам
 for _, player in ipairs(Players:GetPlayers()) do
-    AddBeamGlow(player)
+    AddGlowOutline(player)
 end
 
-Players.PlayerAdded:Connect(AddBeamGlow)
+Players.PlayerAdded:Connect(AddGlowOutline)
 
-print("SWILL: Beam Glow ESP включён!")
+print("========================================")
+print("SWILL: Glow обводка персонажа включена")
+print("Красный контур вокруг врагов через стены")
+print("========================================")
